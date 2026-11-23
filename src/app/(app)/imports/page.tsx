@@ -9,8 +9,11 @@ import { IMPORT_FIELDS, PRESETS } from "@/lib/csv-import";
 import { SOURCES } from "@/db/schema";
 import { ImportWizard } from "./import-wizard";
 import { UndoButton } from "./undo-button";
+import { WixSyncPanel } from "./wix-sync-panel";
+import { getSyncState } from "@/server/intake/wix-sync";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // "Sync now" can import a backlog
 
 export default async function ImportsPage() {
   const { batches, page } = await withPage(async (tx) => ({
@@ -23,6 +26,7 @@ export default async function ImportsPage() {
   }));
   if (!can(page.session, "imports:create")) redirect("/leads");
   const canUndo = can(page.session, "imports:undo");
+  const sync = await getSyncState(page.session.orgId);
 
   return (
     <div className="space-y-6">
@@ -32,6 +36,17 @@ export default async function ImportsPage() {
           Upload a CSV, check the column mapping, preview, then import. Re-importing the same file creates nothing new.
         </p>
       </div>
+
+      <WixSyncPanel
+        canRun={can(page.session, "imports:create")}
+        status={{
+          configured: !!(process.env.WIX_API_KEY && process.env.WIX_SITE_ID),
+          lastRunAt: sync.lastRunAt ?? null,
+          lastError: sync.lastError ?? null,
+          lastResult: (sync.lastResult as unknown as Record<string, number>) ?? null,
+          liveSince: sync.liveSince ?? null,
+        }}
+      />
 
       <ImportWizard
         fields={Object.entries(IMPORT_FIELDS).map(([value, label]) => ({ value, label }))}

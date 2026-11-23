@@ -77,3 +77,19 @@ export async function undoImportAction(batchId: string): Promise<R<{ archived: n
   revalidatePath("/leads");
   return res;
 }
+
+export async function syncWixNowAction(): Promise<R<{ created: number; attached: number }>> {
+  const session = await requireSession();
+  const res = await guard(async () => {
+    authorize(session, "imports:create");
+    const apiKey = process.env.WIX_API_KEY;
+    const siteId = process.env.WIX_SITE_ID;
+    if (!apiKey || !siteId) throw new LeadError("Wix sync isn't connected (WIX_API_KEY missing)");
+    const { runWixSync, wixRestClient } = await import("@/server/intake/wix-sync");
+    const r = await runWixSync(session.orgId, wixRestClient(apiKey, siteId));
+    return { created: r.created, attached: r.attached };
+  });
+  revalidatePath("/imports");
+  revalidatePath("/leads");
+  return res;
+}

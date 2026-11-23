@@ -34,4 +34,19 @@ export const leadCreated = inngest.createFunction(
   async ({ event }) => ({ received: event.data.leadId }),
 );
 
-export const functions = [dailyDigest, nightly, leadCreated];
+/** Every 15 minutes: pull new Wix Forms + Quote Builder leads (no-op until WIX_API_KEY is set). */
+export const wixSync = inngest.createFunction(
+  { id: "wix-sync", retries: 1, concurrency: { limit: 1 } },
+  { cron: "*/15 * * * *" },
+  async ({ step }) => {
+    const apiKey = process.env.WIX_API_KEY;
+    const siteId = process.env.WIX_SITE_ID;
+    if (!apiKey || !siteId) return { skipped: "WIX_API_KEY / WIX_SITE_ID not set" };
+    const orgId = await step.run("resolve-org", resolveOrgId);
+    if (!orgId) return { skipped: "no org" };
+    const { runWixSync, wixRestClient } = await import("@/server/intake/wix-sync");
+    return step.run("sync", () => runWixSync(orgId, wixRestClient(apiKey, siteId)));
+  },
+);
+
+export const functions = [dailyDigest, nightly, leadCreated, wixSync];

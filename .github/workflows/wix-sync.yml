@@ -1,0 +1,22 @@
+name: Wix sync
+# Pulls new Wix Forms + Quote Builder leads into the CRM every 15 minutes.
+# GitHub may delay scheduled runs by a few minutes; Vercel Cron runs a daily backup.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRM_URL: ${{ vars.CRM_URL || 'https://luxel-crm.vercel.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET repo secret is not set"; exit 1; fi
+          code=$(curl -s -o out.json -w "%{http_code}" -X POST "$CRM_URL/api/cron/wix-sync" -H "Authorization: Bearer $CRON_SECRET")
+          cat out.json; echo
+          test "$code" = "200"

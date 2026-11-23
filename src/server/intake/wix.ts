@@ -48,7 +48,10 @@ export interface WixIntakeResult {
   leadId: string | null;
 }
 
-export async function handleWixSubmission(body: unknown, opts: { now?: Date; backfill?: boolean; defaultForm?: "quote_builder" | "contact_us" } = {}): Promise<WixIntakeResult> {
+export async function handleWixSubmission(
+  body: unknown,
+  opts: { now?: Date; backfill?: boolean; keepSubmittedAt?: boolean; defaultForm?: "quote_builder" | "contact_us" } = {},
+): Promise<WixIntakeResult> {
   const orgId = await resolveOrgId();
   if (!orgId) throw new Error("org not found");
   const mapped = mapWixPayload(body, { defaultForm: opts.defaultForm });
@@ -59,7 +62,8 @@ export async function handleWixSubmission(body: unknown, opts: { now?: Date; bac
       form: mapped.form,
       submissionId: mapped.submissionId,
       rawPayload: redact(body),
-      createdAt: opts.backfill ? mapped.submittedAt ?? undefined : undefined,
+      // backfills and the scheduled sync keep the Wix submission time; live webhooks use "now"
+      createdAt: opts.backfill || opts.keepSubmittedAt ? mapped.submittedAt ?? undefined : undefined,
       autoFollowUp: !opts.backfill,
       // historical submissions: no round-robin assignment (and no "assigned to you" flood); bulk-assign later
       autoAssign: !opts.backfill,

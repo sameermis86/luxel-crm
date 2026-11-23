@@ -51,7 +51,8 @@ async function wix(path: string, body: unknown) {
   if (!key || !site) throw new Error("Set WIX_API_KEY and WIX_SITE_ID (or use --csv)");
   const res = await fetch(`https://www.wixapis.com${path}`, {
     method: "POST",
-    headers: { Authorization: key.startsWith("Bearer ") ? key : `Bearer ${key}`, "wix-site-id": site, "Content-Type": "application/json" },
+    // Wix REST "API key admin": the key goes in Authorization as-is (no "Bearer"), plus wix-site-id
+    headers: { Authorization: key, "wix-site-id": site, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Wix ${path} → ${res.status}: ${await res.text()}`);

@@ -388,6 +388,18 @@ export const savedViews = pgTable("saved_views", {
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
+/** Small key/value store for integrations (e.g. the Wix sync cursor). */
+export const integrationState = pgTable(
+  "integration_state",
+  {
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    key: text("key").notNull(),
+    value: jsonb("value").notNull().default({}),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.key] })],
+);
+
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type LeadEvent = typeof leadEvents.$inferSelect;

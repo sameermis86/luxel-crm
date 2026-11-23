@@ -144,6 +144,33 @@ For each contact form ("Event Contact Form" and "Contact"):
 
 ---
 
+## 3b. Scheduled sync (pull) — always on once connected
+
+Independently of the push above, the CRM pulls from Wix every 15 minutes:
+
+- **Wix Forms** submissions (all forms except job applications / newsletter sign-ups)
+- the **Quote Builder**'s CMS collection `QuoteLeads` (which the push in step 2 doesn't need to exist for)
+
+Rules: leads whose event date has passed are skipped; leads with no event date are kept only if submitted in the last ~6 months.
+Event Contact Form inquiries with no explicit occasion are treated as weddings. Everything is idempotent (keyed on the Wix id),
+so push + pull together never double-count.
+
+The very first run imports existing records as a **backfill** (original dates, no assignment or follow-up). From then on,
+new submissions arrive as live leads (assigned, scored, first follow-up).
+
+Setup:
+
+1. **Wix API key** — Wix account → *API Keys Manager* → Generate API Key. Permissions: **Wix Forms** (read submissions/forms)
+   and **Wix Data / CMS** (read data items). Copy the key.
+2. **Vercel** → project `luxel-crm` → Settings → Environment Variables → add `WIX_API_KEY` (Production + Preview, mark Sensitive), then redeploy.
+   `WIX_SITE_ID` and `CRON_SECRET` are already set.
+3. **GitHub** → repo `luxel-crm` → Settings → Secrets and variables → Actions → New repository secret `CRON_SECRET`
+   with the same value as Vercel's `CRON_SECRET` (Vercel: Environment Variables → CRON_SECRET → reveal).
+   This powers the 15-minute schedule (`.github/workflows/wix-sync.yml`). Vercel Cron also runs it once a day as a backup.
+4. Check **Import → Wix sync** in the CRM: last run time and counts; **Sync now** runs it on demand.
+
+The endpoint is `POST /api/cron/wix-sync` with `Authorization: Bearer <CRON_SECRET>`.
+
 ## 4. Testing
 
 ```bash
