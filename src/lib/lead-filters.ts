@@ -36,6 +36,9 @@ export const leadFilterSchema = z.object({
   created_to: isoDate.optional().catch(undefined),
   won_from: isoDate.optional().catch(undefined),
   won_to: isoDate.optional().catch(undefined),
+  /** won or lost within the range ("decided") */
+  closed_from: isoDate.optional().catch(undefined),
+  closed_to: isoDate.optional().catch(undefined),
   event_from: isoDate.optional().catch(undefined),
   event_to: isoDate.optional().catch(undefined),
   event_year: z.coerce.number().int().min(2000).max(2100).optional().catch(undefined),
@@ -185,6 +188,12 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.created_to) c.push(lt(leads.createdAt, endOfDayExclusiveInTz(f.created_to, tz)));
   if (f.won_from) c.push(gte(leads.wonAt, startOfDayInTz(f.won_from, tz)));
   if (f.won_to) c.push(lt(leads.wonAt, endOfDayExclusiveInTz(f.won_to, tz)));
+  if (f.closed_from || f.closed_to) {
+    const closedAt = sql`coalesce(${leads.wonAt}, ${leads.lostAt})`;
+    c.push(inArray(leads.status, ["won", "lost"]));
+    if (f.closed_from) c.push(sql`${closedAt} >= ${startOfDayInTz(f.closed_from, tz).toISOString()}::timestamptz`);
+    if (f.closed_to) c.push(sql`${closedAt} < ${endOfDayExclusiveInTz(f.closed_to, tz).toISOString()}::timestamptz`);
+  }
   if (f.event_from) c.push(gte(leads.eventDate, f.event_from));
   if (f.event_to) c.push(lte(leads.eventDate, f.event_to));
   if (f.event_year) c.push(and(gte(leads.eventDate, `${f.event_year}-01-01`), lte(leads.eventDate, `${f.event_year}-12-31`)));
@@ -220,6 +229,7 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.event_type) out.push(f.event_type.map(h).join(", "));
   if (f.band) out.push(f.band.join(", "));
   if (f.created_from || f.created_to) out.push(`created ${f.created_from ?? "…"} → ${f.created_to ?? "…"}`);
+  if (f.closed_from || f.closed_to) out.push(`won or lost ${f.closed_from ?? "…"} → ${f.closed_to ?? "…"}`);
   if (f.won_from || f.won_to) out.push(`won ${f.won_from ?? "…"} → ${f.won_to ?? "…"}`);
   if (f.event_year) out.push(`events in ${f.event_year}`);
   if (f.reached) out.push(`reached ${h(f.reached)}`);
