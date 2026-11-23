@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
   }
   try {
     const formHint = req.nextUrl.searchParams.get("form");
+    // ?backfill=1: historical import (original submission time, actor = import, no follow-up/assignment).
+    // Only with header auth (HMAC/Bearer), never with the URL token the Automation uses.
+    const backfill = req.nextUrl.searchParams.get("backfill") === "1" && !req.nextUrl.searchParams.has("token");
     const result = await handleWixSubmission(body, {
+      backfill,
       defaultForm: formHint === "quote_builder" || formHint === "contact_us" ? formHint : undefined,
     });
     return NextResponse.json({ ok: true, ...result }, { status: result.outcome === "created" ? 201 : 200 });

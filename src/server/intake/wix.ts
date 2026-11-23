@@ -61,6 +61,8 @@ export async function handleWixSubmission(body: unknown, opts: { now?: Date; bac
       rawPayload: redact(body),
       createdAt: opts.backfill ? mapped.submittedAt ?? undefined : undefined,
       autoFollowUp: !opts.backfill,
+      // historical submissions: no round-robin assignment (and no "assigned to you" flood); bulk-assign later
+      autoAssign: !opts.backfill,
       now: opts.now,
     }),
   );

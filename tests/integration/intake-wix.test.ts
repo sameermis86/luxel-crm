@@ -127,3 +127,26 @@ describe("POST /api/intake/wix", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("backfill mode", () => {
+  it("keeps the original submission time, records an import, no follow-up, no owner", async () => {
+    const raw = JSON.stringify({ id: "hist-1", formId: "f1", createdDate: "2025-06-02T15:00:00Z", submissions: { first_name_70be: "Old Inquiry", email_b935: "old.inquiry@example.com", event_date: "2025-09-20" } });
+    const res = await POST(new NextRequest("http://localhost/api/intake/wix?backfill=1&form=contact_us", { method: "POST", body: raw, headers: { "x-luxel-signature": sign(raw, SECRET) } }));
+    const json = await res.json();
+    expect(json.outcome).toBe("created");
+    const [lead] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.id, json.leadId)));
+    expect(lead.createdAt.toISOString()).toBe("2025-06-02T15:00:00.000Z");
+    expect(lead.ownerId).toBeNull();
+    expect(lead.nextFollowUpAt).toBeNull();
+    expect(lead.qualification).toBe("unqualified"); // event date has passed
+    const [ev] = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "created"))));
+    expect(ev.actorKind).toBe("import");
+  });
+  it("is ignored when authenticated with the URL token", async () => {
+    const raw = JSON.stringify({ id: "hist-2", submissions: { email_b935: "tok@example.com" }, createdDate: "2025-01-01T00:00:00Z" });
+    const res = await POST(new NextRequest(`http://localhost/api/intake/wix?backfill=1&token=${SECRET}`, { method: "POST", body: raw }));
+    const json = await res.json();
+    const [lead] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.id, json.leadId)));
+    expect(lead.createdAt.getFullYear()).toBeGreaterThan(2025);
+  });
+});
