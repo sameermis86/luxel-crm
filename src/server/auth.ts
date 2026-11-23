@@ -23,11 +23,8 @@ export function authMode(): "dev" | "supabase" {
   return mode;
 }
 
-export async function resolveOrgId(): Promise<string | null> {
-  const slug = process.env.DEFAULT_ORG_SLUG ?? "luxel";
-  const rows = await getDb().execute<{ id: string | null }>(sql`select app.resolve_org(${slug}) as id`);
-  return rows[0]?.id ?? null;
-}
+import { resolveOrgId } from "./org";
+export { resolveOrgId };
 
 async function resolveUser(orgId: string, authUserId: string | null, email: string): Promise<Session | null> {
   const rows = await getDb().execute<{ id: string; org_id: string; name: string; email: string; role: Role; active: boolean }>(
