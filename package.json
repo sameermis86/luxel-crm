@@ -18,7 +18,9 @@
     "backfill:wix": "tsx scripts/backfill-wix.ts",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "db:demo": "tsx scripts/seed-demo.ts",
-    "job": "tsx scripts/run-job.ts"
+    "job": "tsx scripts/run-job.ts",
+    "vercel-build": "tsx scripts/provision.ts && next build",
+    "db:provision": "tsx scripts/provision.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

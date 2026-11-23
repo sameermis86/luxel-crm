@@ -11,10 +11,13 @@ export async function seed(url: string) {
   const [org] = await sql`
     insert into orgs (slug, name) values (${slug}, 'Luxel Decor & Flowers')
     on conflict (slug) do update set name = excluded.name returning id`;
-  for (const u of [
-    { name: "Sameer", email: "sameer@luxeldecor.com" },
-    { name: "Mansi", email: "mansi@luxeldecor.com" },
-  ]) {
+  // SEED_OWNERS="Sameer:sameer@example.com,Mansi:mansi@example.com" overrides the default logins
+  const owners = (process.env.SEED_OWNERS ?? "Sameer:sameer@luxeldecor.com,Mansi:mansi@luxeldecor.com")
+    .split(",")
+    .map((p) => p.trim().split(":"))
+    .filter(([n, e]) => n && e)
+    .map(([name, email]) => ({ name: name.trim(), email: email.trim().toLowerCase() }));
+  for (const u of owners) {
     await sql`
       insert into users (org_id, name, email, role, active, accepts_leads)
       values (${org.id}, ${u.name}, ${u.email}, 'owner', true, true)
