@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1b2420;
+  --color-bloom: #bc5468;
+  --color-bloom-soft: #f6e3e7;
+  --color-stem: #5f8568;
+  --color-stem-soft: #e4ede6;
+  --color-sage: #8aa890;
+  --color-paper: #f4f2ec;
+  --color-card: #ffffff;
+  --color-edge: #dcd6cb;
+  --color-muted: #7b786f;
+  --color-amber: #b07a2a;
+  --color-amber-soft: #f6ecd9;
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html { background: var(--color-paper); color: var(--color-ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; }
+
+:focus-visible { outline: 2px solid var(--color-bloom); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html *, html *::before, html *::after { transition: none !important; animation: none !important; }
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-edge bg-card px-3 py-1.5 text-sm text-ink transition-colors duration-150 hover:border-ink/40 disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn border-ink bg-ink text-paper hover:bg-ink/85;
+}
+@utility btn-bloom {
+  @apply btn border-bloom bg-bloom text-white hover:bg-bloom/90;
+}
+@utility btn-ghost {
+  @apply btn border-transparent bg-transparent hover:bg-ink/5;
+}
+@utility input {
+  @apply w-full rounded-md border border-edge bg-card px-2.5 py-1.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink/50 focus:outline-none;
+}
+@utility label {
+  @apply mb-1 block text-xs font-medium tracking-wide text-muted uppercase;
+}
+@utility card {
+  @apply rounded-lg border border-edge bg-card;
+}
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+}
+@utility th {
+  @apply px-3 py-2 text-left text-[11px] font-semibold tracking-wide text-muted uppercase;
+}
+@utility td {
+  @apply px-3 py-2 text-sm;
+}

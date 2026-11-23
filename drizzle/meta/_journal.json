@@ -22,6 +22,27 @@
       "when": 1795467985188,
       "tag": "0002_rls_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795468673875,
+      "tag": "0003_auth_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795469182387,
+      "tag": "0004_intake_link_grant",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795469317119,
+      "tag": "0005_event_seq",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   primaryKey,
   real,
+  bigserial,
 } from "drizzle-orm/pg-core";
 
 /* -------------------------------------------------------------------------- */
@@ -287,6 +288,8 @@ export const leadEvents = pgTable(
   "lead_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** insertion order, for a stable timeline when several events share a timestamp */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
     leadId: uuid("lead_id").notNull().references(() => leads.id),
     orgId: uuid("org_id").notNull().references(() => orgs.id),
     at: ts("at").notNull().defaultNow(),

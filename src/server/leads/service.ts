@@ -101,7 +101,6 @@ const TRACKED_FIELDS = [...Object.keys(leadFieldsSchema.shape), "duplicateOfId",
 const FIELD_EVENT: Partial<Record<string, EventKind>> = {
   status: "status_changed",
   ownerId: "assigned",
-  nextFollowUpAt: "follow_up_set",
   duplicateOfId: "merged",
   archivedAt: "archived",
 };
@@ -380,6 +379,7 @@ export async function updateLead(
     field: c.field,
     oldValue: serialize(c.old),
     newValue: serialize(c.new),
+    at: opts.now,
     payload:
       c.field === "score"
         ? sq.breakdown
@@ -389,9 +389,19 @@ export async function updateLead(
   }));
   if (changes.some((c) => c.field === "status" && c.new === "won")) {
     const days = Math.round((now.getTime() - current.createdAt.getTime()) / 86_400_000);
-    events.push({ type: "converted", newValue: serialize(saved.contractValue), payload: { contractValue: saved.contractValue, daysToConvert: days } });
+    events.push({ at: opts.now, type: "converted", newValue: serialize(saved.contractValue), payload: { contractValue: saved.contractValue, daysToConvert: days } });
   }
   await writeEvents(tx, ctx, leadId, events);
+
+  // closing a lead closes its open follow-ups
+  if (fields.status && ["won", "lost", "unqualified"].includes(fields.status) && fields.status !== current.status) {
+    const open = await tx.select({ id: followUps.id }).from(followUps).where(and(eq(followUps.leadId, leadId), isNull(followUps.doneAt)));
+    for (const f of open) await completeFollowUp(tx, ctx, f.id, now, { reason: `lead ${fields.status}` });
+    if (open.length) {
+      const [fresh] = await tx.select().from(leads).where(eq(leads.id, leadId));
+      return { lead: fresh, changed: changes.map((c) => c.field) };
+    }
+  }
   return { lead: saved, changed: changes.map((c) => c.field) };
 }
 
@@ -420,14 +430,15 @@ const ACTIVITY_EVENT = { call: "call_logged", email: "email_logged", meeting: "m
  * `contacted`; an inbound reply after first contact counts toward engagement.
  * Any open follow-ups due by now are marked done.
  */
-export async function logActivity(tx: Tx, ctx: Ctx, leadId: string, input: ActivityInput, now = new Date()) {
+export async function logActivity(tx: Tx, ctx: Ctx, leadId: string, input: ActivityInput, nowArg?: Date) {
+  const now = nowArg ?? new Date();
   const a = activitySchema.parse(input);
   const lead = await getLeadForUpdate(tx, leadId);
   if (lead.duplicateOfId || lead.archivedAt) throw new LeadError("This lead is read-only", "read_only");
   const at = a.occurredAt ?? now;
 
   await writeEvents(tx, ctx, leadId, [
-    { type: ACTIVITY_EVENT[a.kind], payload: { summary: a.summary, direction: a.direction, outcome: a.outcome ?? null, occurredAt: at } },
+    { at: nowArg ? at : undefined, type: ACTIVITY_EVENT[a.kind], payload: { summary: a.summary, direction: a.direction, outcome: a.outcome ?? null, occurredAt: at } },
   ]);
 
   if (a.kind === "note") return { lead };
@@ -467,7 +478,10 @@ export async function setFollowUp(
     .insert(followUps)
     .values({ orgId: ctx.orgId, leadId, dueAt: input.dueAt, ownerId: input.ownerId ?? lead.ownerId, note: input.note ?? null })
     .returning();
-  await syncNextFollowUp(tx, ctx, leadId, now, { followUpId: fu.id, note: fu.note, dueAt: fu.dueAt });
+  await writeEvents(tx, ctx, leadId, [
+    { type: "follow_up_set", newValue: serialize(fu.dueAt), payload: { followUpId: fu.id, note: fu.note, ownerId: fu.ownerId } },
+  ]);
+  await syncNextFollowUp(tx, ctx, leadId, now, { followUpId: fu.id });
   return fu;
 }
 

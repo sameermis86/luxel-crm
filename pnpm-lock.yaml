@@ -50,6 +50,9 @@ importers:
       resend:
         specifier: ^6.39.0
         version: 6.39.0
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -2547,6 +2550,9 @@ packages:
 
   serialize-error-cjs@0.1.5:
     resolution: {integrity: sha512-B1hstO7YvbP6Fs5P7JONtpLz/qEXVkhAAohybcn3rpdCBJ5w2U6JgPAGLSrx+ccWiIcY6eqUFpTyFL8fFvMClw==}
+
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   sharp@0.35.5:
     resolution: {integrity: sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g==}
@@ -5060,6 +5066,8 @@ snapshots:
     optional: true
 
   serialize-error-cjs@0.1.5: {}
+
+  server-only@0.0.1: {}
 
   sharp@0.35.5(@types/node@26.6.6):
     dependencies:
