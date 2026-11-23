@@ -77,13 +77,14 @@ export async function findDuplicates(tx: Tx, ctx: Ctx, probe: DupProbe, opts: { 
         status: leads.status,
         createdAt: leads.createdAt,
         ownerName: users.name,
+        duplicateOfId: leads.duplicateOfId,
       })
       .from(leads)
       .leftJoin(users, eq(users.id, leads.ownerId))
       .where(
         and(
           eq(leads.orgId, ctx.orgId),
-          isNull(leads.duplicateOfId),
+          // merged records still match (their email/phone are still that person) but resolve to the survivor below
           isNull(leads.archivedAt),
           exclude.length ? sql`${leads.id} not in (${sql.join(exclude.map((e) => sql`${e}::uuid`), sql`, `)})` : undefined,
           or(...ors),
@@ -93,10 +94,30 @@ export async function findDuplicates(tx: Tx, ctx: Ctx, probe: DupProbe, opts: { 
   );
 
   const out: DuplicateMatch[] = [];
-  for (const r of rows) {
-    const m = classifyMatch(p, r);
-    if (m)
-      out.push({
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const m = classifyMatch(p, row);
+    if (!m) continue;
+    let r = row;
+    // follow merged records to the lead that survived
+    for (let hops = 0; r.duplicateOfId && hops < 10; hops++) {
+      const [next] = await asSystem(tx, ctx, () =>
+        tx
+          .select({
+            id: leads.id, recordId: leads.recordId, emailNormalized: leads.emailNormalized, phoneE164: leads.phoneE164,
+            firstName: leads.firstName, lastName: leads.lastName, partnerName: leads.partnerName, eventDate: leads.eventDate,
+            eventType: leads.eventType, status: leads.status, createdAt: leads.createdAt, ownerName: users.name, duplicateOfId: leads.duplicateOfId,
+          })
+          .from(leads)
+          .leftJoin(users, eq(users.id, leads.ownerId))
+          .where(eq(leads.id, r.duplicateOfId!)),
+      );
+      if (!next) break;
+      r = next;
+    }
+    if (r.duplicateOfId || seen.has(r.id) || exclude.includes(r.id)) continue;
+    seen.add(r.id);
+    out.push({
         ...m,
         lead: {
           id: r.id, recordId: r.recordId, firstName: r.firstName, lastName: r.lastName, eventType: r.eventType,

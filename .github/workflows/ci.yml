@@ -1,0 +1,38 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create roles and test database
+        run: |
+          psql -h localhost -U postgres -c "create role luxel_owner login password 'luxel_owner'; create role luxel_app login password 'luxel_app' nobypassrls;"
+          psql -h localhost -U postgres -c "create database luxel_test owner luxel_owner;"
+          psql -h localhost -U postgres -d luxel_test -c "create extension if not exists pg_trgm;"
+      - run: cp .env.example .env
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
