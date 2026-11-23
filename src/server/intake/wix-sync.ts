@@ -53,6 +53,8 @@ export interface SyncResult {
   skippedNotLead: number;
   failed: number;
   backfilled: number;
+  /** stopped early to stay inside the function time limit; the next run continues */
+  more?: boolean;
 }
 
 export async function getSyncState(orgId: string): Promise<SyncState> {
@@ -73,7 +75,10 @@ async function saveSyncState(orgId: string, value: SyncState) {
   );
 }
 
-export async function runWixSync(orgId: string, client: WixClient, now = new Date()): Promise<SyncResult> {
+export async function runWixSync(orgId: string, client: WixClient, now = new Date(), opts: { budgetMs?: number } = {}): Promise<SyncResult> {
+  const started = Date.now();
+  const budgetMs = opts.budgetMs ?? 45_000;
+  const outOfTime = () => Date.now() - started > budgetMs;
   const state = await getSyncState(orgId);
   const liveSince = state.liveSince ?? now.toISOString();
   const epoch = "2000-01-01T00:00:00.000Z";
@@ -82,6 +87,13 @@ export async function runWixSync(orgId: string, client: WixClient, now = new Dat
   const r: SyncResult = { checked: 0, created: 0, attached: 0, alreadyImported: 0, skippedPastEvent: 0, skippedNotLead: 0, failed: 0, backfilled: 0 };
   let formsCursor = state.formsCursor;
   let quoteCursor = state.quoteLeadsCursor;
+  let sinceCheckpoint = 0;
+  // items are processed oldest-first, so the cursor can advance item by item and be saved as we go
+  const checkpoint = async (force = false) => {
+    if (!force && ++sinceCheckpoint < 20) return;
+    sinceCheckpoint = 0;
+    await saveSyncState(orgId, { ...state, liveSince, formsCursor, quoteLeadsCursor: quoteCursor, lastRunAt: now.toISOString(), lastResult: r, lastError: null });
+  };
 
   const ingest = async (payload: unknown, createdAt: string | null, defaultForm: "quote_builder" | "contact_us") => {
     const backfill = !createdAt || createdAt < liveSince;
@@ -103,7 +115,12 @@ export async function runWixSync(orgId: string, client: WixClient, now = new Dat
     const byId = new Map(forms.map((f) => [f.id, f]));
     const subs = await client.submissionsSince(since(formsCursor));
     for (const s of subs) {
+      if (outOfTime()) {
+        r.more = true;
+        break;
+      }
       r.checked++;
+      await checkpoint();
       if (!formsCursor || s.createdDate > formsCursor) formsCursor = s.createdDate;
       const form = byId.get(s.formId);
       if (!form || !isLeadForm(form.name)) {
@@ -118,9 +135,14 @@ export async function runWixSync(orgId: string, client: WixClient, now = new Dat
     }
 
     // Quote Builder (QuoteLeads CMS collection)
-    const quotes = await client.quoteLeadsSince(since(quoteCursor));
+    const quotes = r.more ? [] : await client.quoteLeadsSince(since(quoteCursor));
     for (const q of quotes) {
+      if (outOfTime()) {
+        r.more = true;
+        break;
+      }
       r.checked++;
+      await checkpoint();
       const created = quoteLeadCreatedAt(q);
       const cmsCreated = typeof q._createdDate === "object" ? q._createdDate?.$date : q._createdDate;
       if (cmsCreated && (!quoteCursor || cmsCreated > quoteCursor)) quoteCursor = cmsCreated;

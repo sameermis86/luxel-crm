@@ -89,3 +89,16 @@ describe("scheduled Wix sync", () => {
     expect(after.lastError).toBe("Wix 503");
   });
 });
+
+describe("time budget", () => {
+  it("stops early with more=true and continues on the next run without losing anything", async () => {
+    for (let i = 0; i < 5; i++) {
+      subs.push({ id: `bulk-${i}`, formId: "ecf", createdDate: `2026-11-23T18:0${i}:00Z`, submissions: { first_name_70be: `Bulk ${i}`, email_b935: `bulk${i}@example.com`, event_date: "2027-09-01" } });
+    }
+    const first = await runWixSync(env.orgId, fakeClient(), new Date("2026-11-23T18:30:00Z"), { budgetMs: -1 });
+    expect(first.more).toBe(true);
+    let total = 0;
+    for (let i = 0; i < 3; i++) total += (await runWixSync(env.orgId, fakeClient(), new Date("2026-11-23T18:31:00Z"))).created;
+    expect(total).toBe(5);
+  });
+});
