@@ -68,6 +68,7 @@ export function WeeklyChart({ data }: { data: { label: string; qualified: number
   if (!data.length) return <Empty />;
   const seg = (key: "qualified" | "needs_info" | "unqualified", name: string, top: boolean) => (
     <Bar
+      isAnimationActive={false}
       dataKey={key}
       name={name}
       stackId="q"
