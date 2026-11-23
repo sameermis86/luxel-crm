@@ -17,7 +17,8 @@
     "intake:test": "tsx scripts/post-sample-payloads.ts",
     "backfill:wix": "tsx scripts/backfill-wix.ts",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
-    "db:demo": "tsx scripts/seed-demo.ts"
+    "db:demo": "tsx scripts/seed-demo.ts",
+    "job": "tsx scripts/run-job.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
