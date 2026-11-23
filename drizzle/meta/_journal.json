@@ -43,6 +43,13 @@
       "when": 1795469317119,
       "tag": "0005_event_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795470297409,
+      "tag": "0006_import_row_hash",
+      "breakpoints": true
     }
   ]
 }

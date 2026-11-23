@@ -68,6 +68,8 @@ export function splitFullName(full: string | null | undefined): SplitName {
     firstName = parts[0];
     lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
   }
+  // "Olivia & Daniel Park": a single first name shares the partner's surname
+  if (!lastName && partnerName && partnerName.split(" ").length > 1) lastName = partnerName.split(" ").pop()!;
   const out: SplitName = { firstName: firstName ? cap(firstName) : null, lastName: lastName ? cap(lastName) : null };
   if (partnerName) out.partnerName = partnerName;
   return out;

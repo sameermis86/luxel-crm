@@ -43,6 +43,8 @@ describe("splitFullName", () => {
   it("handles 'Last, First'", () => expect(splitFullName("Rossi, Sofia")).toEqual({ firstName: "Sofia", lastName: "Rossi" }));
   it("handles couples", () =>
     expect(splitFullName("Sofia Rossi & Marco Bianchi")).toEqual({ firstName: "Sofia", lastName: "Rossi", partnerName: "Marco Bianchi" }));
+  it("couples sharing a surname", () =>
+    expect(splitFullName("Olivia & Daniel Park")).toEqual({ firstName: "Olivia", lastName: "Park", partnerName: "Daniel Park" }));
   it("handles single names", () => expect(splitFullName("Sofia")).toEqual({ firstName: "Sofia", lastName: null }));
 });
 
