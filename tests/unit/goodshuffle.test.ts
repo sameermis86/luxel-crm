@@ -64,6 +64,10 @@ describe("matchEvent", () => {
   it("two leads with the same surname and date go to review, not a guess", () => {
     expect(matchEvent(evs[2], leads)).toMatchObject({ leadId: null, reason: "More than one lead could match" });
   });
+  it("uses the Client line, not venue words in the title", () => {
+    const e = { uid: "x", summary: "📓 Paradise Banquet - Lopez", description: "Status: Quote Sent\nProject: Lopez Wedding (123456789)\nClient: Ana Lopez\nClient Phone #: (999) 000-0000", location: "", startDate: "2027-06-12" };
+    expect(matchEvent(e, leads)).toMatchObject({ leadId: "other", how: "date_and_name" });
+  });
   it("no lead on that date", () => {
     expect(matchEvent({ ...evs[0], startDate: "2028-01-01" }, leads)).toMatchObject({ leadId: null, reason: "No lead with that event date" });
   });

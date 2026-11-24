@@ -93,6 +93,12 @@ export function extractContacts(text: string) {
   return { emails, phones };
 }
 
+/** The "Client: …" line Goodshuffle writes into each calendar event. */
+export function clientName(ev: Pick<IcsEvent, "description">): string | null {
+  const m = ev.description.match(/^Client:\s*(.+)$/im);
+  return m ? m[1].trim() || null : null;
+}
+
 export interface CandidateLead {
   id: string;
   firstName: string | null;
@@ -129,7 +135,10 @@ export function matchEvent(ev: IcsEvent, leads: CandidateLead[]): GsMatch {
   }
   if (!ev.startDate) return { leadId: null, how: null, confidence: 0, reason: "Event has no date" };
   const window = new Set([addDaysToDate(ev.startDate, -1), ev.startDate, addDaysToDate(ev.startDate, 1)]);
-  const evTokens = new Set(tokens(ev.summary + " " + ev.description.slice(0, 300)));
+  // Goodshuffle puts "Client: <name>" in the description; use it (the title also carries venue words)
+  const client = clientName(ev);
+  const nameText = client ?? ev.summary;
+  const evTokens = new Set(tokens(nameText));
   const scored = leads
     .filter((l) => l.eventDate && window.has(l.eventDate))
     .map((l) => {
@@ -137,7 +146,7 @@ export function matchEvent(ev: IcsEvent, leads: CandidateLead[]): GsMatch {
       for (const n of leadNames(l)) {
         const nt = tokens(n);
         const overlap = nt.length ? nt.filter((t) => evTokens.has(t)).length / nt.length : 0;
-        best = Math.max(best, overlap, trigramSimilarity(n, ev.summary));
+        best = Math.max(best, overlap, trigramSimilarity(n, nameText));
       }
       const lastHit = !!l.lastName && tokens(l.lastName).some((t) => evTokens.has(t));
       return { l, score: lastHit ? Math.max(best, 0.75) : best };
