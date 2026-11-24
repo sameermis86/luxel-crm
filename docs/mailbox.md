@@ -3,8 +3,8 @@
 Every scheduled sync reads the shared mailbox over IMAP and logs client emails on lead timelines.
 
 - **Reads:** Sent and Inbox, headers only (from, to, cc, date, subject, Message-ID). Never bodies; never
-  sends, moves, flags or deletes anything. First run goes back `mailbox.backfillDays` (180); after that only
-  new messages (by IMAP UID, resuming where it stopped if it runs out of time).
+  sends, moves, flags or deletes anything. First run goes back `mailbox.backfillDays` (700), `mailbox.batchSize` (1500) messages per
+  folder per sync, oldest first; after that only new messages (by IMAP UID, resuming where it stopped).
 - **Sent → lead email:** logged as an outbound email (timeline "Email sent", subject as the summary,
   `via: "mailbox"`). Sets last contacted, moves New → Contacted, and closes open follow-ups that were due by
   the email's time + `mailbox.followUpGraceHours` (12h). An email sent well before a follow-up was due

@@ -26,7 +26,7 @@ export function MailboxPanel({ configured, mailbox, state }: { configured: boole
             <div><dt className="text-muted">Logged on leads</dt><dd className="tabular">{state.logged ?? 0}</dd></div>
             <div><dt className="text-muted">Follow-ups done</dt><dd className="tabular">{state.followUpsClosed ?? 0}</dd></div>
           </dl>
-          <p className="hint">Numbers are for the last check; each email is logged once.</p>
+          <p className="hint">{state.catchingUp ? "Still reading older mail: the first run works through the backlog over several syncs. " : ""}Numbers are for the last check; each email is logged once.</p>
           {state.lastError && <p className="mt-2 text-sm text-bloom">Last check failed: {state.lastError}</p>}
         </>
       )}

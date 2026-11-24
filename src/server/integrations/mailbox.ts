@@ -17,8 +17,8 @@ import { logActivity, setFollowUp, LeadError } from "@/server/leads/service";
 const STATE_KEY = "mailbox_sync";
 
 export interface MailClient {
-  /** messages in a folder with uid > afterUid (or since `since` on the first run), oldest first */
-  fetch(folder: "sent" | "inbox", opts: { afterUid: number | null; since: Date; uidValidity: string | null }): Promise<{ uidValidity: string; messages: MailHeader[] }>;
+  /** up to `limit` messages in a folder with uid > afterUid (or since `since` on the first run), oldest first; `more` if some were left */
+  fetch(folder: "sent" | "inbox", opts: { afterUid: number | null; since: Date; uidValidity: string | null; limit: number }): Promise<{ uidValidity: string; messages: MailHeader[]; more?: boolean }>;
   close(): Promise<void>;
 }
 
@@ -30,6 +30,8 @@ export interface MailboxState {
   logged?: number;
   leadsReached?: number;
   followUpsClosed?: number;
+  /** a backlog is still being read (first run) */
+  catchingUp?: boolean;
 }
 
 export function mailboxConfigured(env: Record<string, string | undefined> = process.env) {
@@ -62,24 +64,26 @@ export async function imapClient(env: Record<string, string | undefined> = proce
   const sentPath = boxes.find((b) => b.specialUse === "\\Sent")?.path ?? boxes.find((b) => /^(inbox[./])?sent( (items|mail|messages))?$/i.test(b.path))?.path ?? "Sent";
   const addr = (list?: { address?: string }[]) => (list ?? []).map((a) => a.address ?? "").filter(Boolean);
   return {
-    async fetch(folder, { afterUid, since, uidValidity }) {
+    async fetch(folder, { afterUid, since, uidValidity, limit }) {
       const lock = await client.getMailboxLock(folder === "sent" ? sentPath : "INBOX", { readOnly: true });
       try {
         const box = client.mailbox as { uidValidity?: bigint | number };
         const validity = String(box.uidValidity ?? "");
         const fresh = !afterUid || uidValidity !== validity; // uids reset: fall back to the date
-        const range = fresh ? ((await client.search({ since }, { uid: true })) || []) : `${afterUid + 1}:*`;
+        const found = ((fresh ? await client.search({ since }, { uid: true }) : await client.search({ uid: `${afterUid + 1}:*` }, { uid: true })) || [])
+          .filter((u) => fresh || u > afterUid!) // "n:*" always includes the last message
+          .sort((a, b) => a - b);
+        const uids = found.slice(0, limit);
         const messages: MailHeader[] = [];
-        if (Array.isArray(range) && range.length === 0) return { uidValidity: validity, messages };
-        for await (const m of client.fetch(range as any, { uid: true, envelope: true, internalDate: true }, { uid: true })) {
-          if (!fresh && m.uid <= afterUid!) continue; // "n:*" always returns the last message
+        if (!uids.length) return { uidValidity: validity, messages };
+        for await (const m of client.fetch(uids, { uid: true, envelope: true, internalDate: true }, { uid: true })) {
           const e = m.envelope;
           messages.push({
             folder, uid: m.uid, messageId: e?.messageId ?? null, date: new Date((e?.date ?? m.internalDate ?? new Date()) as Date),
             subject: e?.subject ?? null, from: addr(e?.from), to: addr(e?.to), cc: addr(e?.cc),
           });
         }
-        return { uidValidity: validity, messages: messages.sort((a, b) => a.uid - b.uid) };
+        return { uidValidity: validity, messages: messages.sort((a, b) => a.uid - b.uid), more: found.length > uids.length };
       } finally {
         lock.release();
       }
@@ -100,9 +104,11 @@ export async function runMailboxSync(orgId: string, client: MailClient, opts: { 
     const folders = { ...(prev.folders ?? {}) };
 
     const all: MailHeader[] = [];
+    let catchingUp = false;
     for (const f of ["sent", "inbox"] as const) {
       const p = folders[f];
-      const r = await client.fetch(f, { afterUid: p?.lastUid ?? null, since, uidValidity: p?.uidValidity ?? null });
+      const r = await client.fetch(f, { afterUid: p?.lastUid ?? null, since, uidValidity: p?.uidValidity ?? null, limit: settings.mailbox.batchSize });
+      if (r.more) catchingUp = true;
       all.push(...r.messages.filter((m) => m.date >= since));
       const last = r.messages.length ? Math.max(...r.messages.map((m) => m.uid)) : p && p.uidValidity === r.uidValidity ? p.lastUid : 0;
       folders[f] = { uidValidity: r.uidValidity, lastUid: last };
@@ -117,7 +123,8 @@ export async function runMailboxSync(orgId: string, client: MailClient, opts: { 
 
     let logged = 0, closed = 0;
     const reached = new Set<string>();
-    for (let i = 0; i < all.length; i++) {
+    let processed = 0;
+    for (let i = 0; i < all.length; i++, processed = i) {
       const m = all[i];
       if (opts.budgetMs && Date.now() - started > opts.budgetMs) {
         // out of time: the next run starts again from the first message not done, per folder
@@ -159,7 +166,10 @@ export async function runMailboxSync(orgId: string, client: MailClient, opts: { 
         }
       }
     }
-    const state: MailboxState = { lastRunAt: now.toISOString(), lastError: null, folders, read: all.length, logged, leadsReached: reached.size, followUpsClosed: closed };
+    const state: MailboxState = {
+      lastRunAt: now.toISOString(), lastError: null, folders, read: all.length, logged, leadsReached: reached.size, followUpsClosed: closed,
+      catchingUp: catchingUp || all.length > processed,
+    };
     await saveState(orgId, state);
     return state;
   } catch (e) {
