@@ -110,7 +110,7 @@ export function ImportWizard({ fields, presets, sources }: { fields: Opt[]; pres
 
       {headers.length > 0 && (
         <div>
-          <h3 className="mb-2 text-lg">Column mapping <span className="text-sm text-muted">· {rows.length} rows in {fileName}</span></h3>
+          <h3 className="mb-2 text-[17px]">Column mapping <span className="text-sm text-muted">· {rows.length} rows in {fileName}</span></h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {headers.map((h) => (
               <label key={h} className="flex items-center gap-2 rounded-md border border-edge p-2 text-sm">

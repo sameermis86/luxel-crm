@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/badges";
 import { fmtDate, fmtShortDateTime, fmtRelative, fullName } from "@/lib/format";
 import type { Status } from "@/db/schema";
 import { DoneButton } from "./done-button";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -22,22 +23,19 @@ export default async function FollowUpsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">My follow-ups</h1>
-          <p className="mt-1 text-sm text-muted">
-            <span className="font-medium text-bloom">{overdue.length} overdue</span> · {today.length} due today · {upcoming.length} upcoming
-          </p>
-        </div>
-        <Link href="/leads?owner=me&awaiting=1" className="btn">All my leads awaiting follow-up →</Link>
-      </div>
+      <PageHeader
+        eyebrow="Sales & CRM"
+        title="My follow-ups"
+        description={<><span className="font-medium text-bloom-strong">{overdue.length} overdue</span> · {today.length} due today · {upcoming.length} upcoming</>}
+        actions={<Link href="/leads?owner=me&awaiting=1" className="btn">All my leads awaiting follow-up</Link>}
+      />
 
       <Section title="Overdue" tone="bloom" rows={overdue} now={page.now} empty="Nothing overdue." />
       <Section title="Due today" tone="ink" rows={today} now={page.now} empty="Nothing else due today." />
       <Section title="Upcoming" tone="muted" rows={upcoming.slice(0, 50)} now={page.now} empty="Nothing scheduled." />
 
       {none.length > 0 && (
-        <section className="card p-4">
+        <section className="card p-5">
           <h2 className="text-xl text-amber">My open leads with no follow-up <span className="text-sm text-muted">({none.length})</span></h2>
           <ul className="mt-2 divide-y divide-edge text-sm">
             {none.map((l) => (
@@ -51,7 +49,7 @@ export default async function FollowUpsPage() {
       )}
 
       {unassigned.length > 0 && (
-        <section className="card p-4">
+        <section className="card p-5">
           <h2 className="text-xl text-stem">New unassigned leads <span className="text-sm text-muted">({unassigned.length})</span></h2>
           <ul className="mt-2 divide-y divide-edge text-sm">
             {unassigned.map((l) => (

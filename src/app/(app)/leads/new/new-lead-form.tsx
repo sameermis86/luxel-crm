@@ -76,7 +76,7 @@ export function NewLeadForm() {
       </div>
 
       <section className="card grid gap-3 p-4 sm:grid-cols-2">
-        <h2 className="text-lg sm:col-span-2">Contact</h2>
+        <h2 className="text-[17px] sm:col-span-2">Contact</h2>
         <Field label="First name"><input className="input" {...bind("firstName")} autoFocus /></Field>
         <Field label="Last name"><input className="input" {...bind("lastName")} /></Field>
         <Field label="Partner name (weddings)"><input className="input" {...bind("partnerName")} /></Field>
@@ -86,7 +86,7 @@ export function NewLeadForm() {
       </section>
 
       <section className="card grid gap-3 p-4 sm:grid-cols-3">
-        <h2 className="text-lg sm:col-span-3">Event</h2>
+        <h2 className="text-[17px] sm:col-span-3">Event</h2>
         <Field label="Event type">
           <select name="eventType" className="input" defaultValue="wedding">
             <option value="wedding">Wedding</option>
@@ -114,7 +114,7 @@ export function NewLeadForm() {
           <legend className="label">Services</legend>
           <div className="flex flex-wrap gap-2">
             {SERVICES.map((s) => (
-              <label key={s} className="chip cursor-pointer border-edge bg-paper font-normal">
+              <label key={s} className="check-chip">
                 <input type="checkbox" name="services" value={s} /> {titleCase(s)}
               </label>
             ))}
@@ -126,7 +126,7 @@ export function NewLeadForm() {
       </section>
 
       <section className="card grid gap-3 p-4 sm:grid-cols-3">
-        <h2 className="text-lg sm:col-span-3">Source</h2>
+        <h2 className="text-[17px] sm:col-span-3">Source</h2>
         <Field label="How did they find us?">
           <select name="source" className="input" defaultValue="phone">
             {SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}

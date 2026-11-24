@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { withPage } from "@/server/page";
 import { getOpsEvent } from "@/server/ops/queries";
@@ -30,8 +31,8 @@ export default async function OpsEventPage({ params, searchParams }: { params: P
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div className="min-w-0">
-          <Link href="/ops" className="text-xs text-muted hover:text-ink">← Event board</Link>
-          <h1 className="mt-1 truncate text-3xl">{e.name}</h1>
+          <Link href="/ops" className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-ink"><ArrowLeft size={14} /> Event board</Link>
+          <h1 className="mt-3 text-[28px] sm:text-[34px]">{e.name}</h1>
           <p className="mt-1 text-sm text-muted">
             {fmtDate(e.eventDate)}{e.timeText ? ` · ${e.timeText}` : ""}{e.venue ? ` · ${e.venue}` : ""}
             {e.gsStatus === "action_needed" && <span className="ml-1.5 text-amber">· action needed in Goodshuffle</span>}
@@ -45,7 +46,7 @@ export default async function OpsEventPage({ params, searchParams }: { params: P
         </div>
       </header>
 
-      <nav aria-label="Event sections" className="flex gap-1 border-b border-edge text-sm print:hidden">
+      <nav aria-label="Event sections" className="-mx-4 flex gap-1 overflow-x-auto border-b border-edge px-4 text-sm whitespace-nowrap sm:mx-0 sm:px-0 print:hidden">
         {(Object.keys(TABS) as Tab[]).map((t) => (
           <Link key={t} href={`/ops/events/${e.id}?tab=${t}`} aria-current={t === tab ? "page" : undefined} className={`-mb-px border-b-2 px-3 py-2 ${t === tab ? "border-ink font-medium" : "border-transparent text-muted hover:text-ink"}`}>
             {TABS[t]}
@@ -81,7 +82,7 @@ export default async function OpsEventPage({ params, searchParams }: { params: P
       {tab === "details" && (
         <div className="grid gap-4 lg:grid-cols-2">
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Event</h2>
+            <h2 className="mb-3 text-[17px]">Event</h2>
             <dl className="grid grid-cols-[120px_1fr] gap-y-1.5">
               <dt className="text-muted">Client</dt><dd>{e.client ?? "—"}</dd>
               <dt className="text-muted">Date / time</dt><dd>{fmtDate(e.eventDate)}{e.timeText ? ` · ${e.timeText}` : ""}</dd>
@@ -97,7 +98,7 @@ export default async function OpsEventPage({ params, searchParams }: { params: P
             </ul>
           </section>
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Contract notes</h2>
+            <h2 className="mb-3 text-[17px]">Contract notes</h2>
             <p className="label">For the client</p>
             <p className="whitespace-pre-line">{e.notesClient ?? "—"}</p>
             <p className="label mt-3">Internal</p>

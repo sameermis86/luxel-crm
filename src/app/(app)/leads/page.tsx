@@ -8,6 +8,8 @@ import { parseLeadFilter, parseListParams, filterToParams, describeFilter, FILTE
 import { STATUS_LABELS } from "@/lib/status";
 import { titleCase } from "@/lib/format";
 import { LeadsTable } from "./leads-table";
+import { PageHeader } from "@/components/page-header";
+import { Download, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { ConsultationsPanel, type ConsultPanelData } from "./consultations";
 import { countLeads } from "@/server/leads/queries";
 import { getSetmoreState, listAppointments, setmoreConfigured } from "@/server/integrations/setmore";
@@ -68,28 +70,31 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
   const summary = describeFilter(filter);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Leads</h1>
-          <p className="mt-1 text-sm text-muted">
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Sales & CRM"
+        title="Leads"
+        description={
+          <>
             <span className="tabular font-medium text-ink" data-testid="lead-count">{total.toLocaleString()}</span> lead{total === 1 ? "" : "s"}
-            {summary.length ? <> · {summary.join(" · ")}</> : null}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <a className="btn" href={`/api/leads/export?${query}`}>Export CSV</a>
-          <Link className="btn-bloom" href="/leads/new">+ New lead</Link>
-        </div>
-      </div>
+            {summary.length ? <> · {summary.join(" · ")}</> : " in the book"}
+          </>
+        }
+        actions={
+          <>
+            <a className="btn" href={`/api/leads/export?${query}`}><Download size={15} strokeWidth={1.75} /> Export CSV</a>
+            <Link className="btn-bloom" href="/leads/new"><Plus size={16} strokeWidth={2} /> New lead</Link>
+          </>
+        }
+      />
 
       <ConsultationsPanel data={consult} />
 
       {views.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-xs tracking-wide text-muted uppercase">Saved views</span>
+          <span className="eyebrow mr-1">Saved views</span>
           {views.map((v) => (
-            <span key={v.id} className="chip border-edge bg-card">
+            <span key={v.id} className="chip h-7 border-edge bg-card px-3 shadow-xs">
               <Link href={`/leads?${v.query}`} className="hover:underline">{v.name}</Link>
               <DeleteViewButton id={v.id} />
             </span>
@@ -97,34 +102,44 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
         </div>
       )}
 
-      <form method="get" action="/leads" className="card grid grid-cols-2 gap-3 p-3 md:grid-cols-4 xl:grid-cols-8">
+      <form method="get" action="/leads" className="card flex flex-wrap items-center gap-2 p-2.5">
         {FILTER_KEYS.filter((k) => !FORM_KEYS.has(k)).map((k) => {
           const v = filter[k as keyof LeadFilter];
           if (v === undefined) return null;
           return <input key={k} type="hidden" name={k} value={Array.isArray(v) ? v.join(",") : v === true ? "1" : String(v)} />;
         })}
-        <div className="col-span-2">
-          <label className="label" htmlFor="q">Search</label>
-          <input id="q" name="q" defaultValue={filter.q ?? ""} placeholder="Name, email, phone, LX-…" className="input" />
-        </div>
+        <label className="relative min-w-[220px] flex-[2_1_260px]">
+          <span className="sr-only">Search</span>
+          <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint" />
+          <input id="q" name="q" defaultValue={filter.q ?? ""} placeholder="Search name, email, phone or LX-…" className="input pl-9" />
+        </label>
         <Select name="status" label="Status" value={single(filter.status)} multi={multi(filter.status)} options={STATUSES.map((s) => [s, STATUS_LABELS[s]])} />
+        <Select name="owner" label="Owner" value={single(filter.owner)} multi={multi(filter.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
         <Select name="source" label="Source" value={single(filter.source)} multi={multi(filter.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
         <Select name="event_type" label="Event type" value={single(filter.event_type)} multi={multi(filter.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
-        <Select name="owner" label="Owner" value={single(filter.owner)} multi={multi(filter.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
-        <div>
-          <label className="label" htmlFor="created_from">Created from</label>
-          <input id="created_from" type="date" name="created_from" defaultValue={filter.created_from ?? ""} className="input" />
-        </div>
-        <div>
-          <label className="label" htmlFor="created_to">Created to</label>
-          <input id="created_to" type="date" name="created_to" defaultValue={filter.created_to ?? ""} className="input" />
-        </div>
-        <label className="flex items-end gap-2 pb-2 text-sm">
-          <input type="checkbox" name="awaiting" value="1" defaultChecked={!!filter.awaiting} /> Awaiting follow-up
-        </label>
-        <div className="col-span-2 flex items-end gap-2 md:col-span-2 xl:col-span-2">
-          <button className="btn-primary">Apply</button>
+        <details className="group relative" open={!!(filter.created_from || filter.created_to || filter.awaiting) || undefined}>
+          <summary className="btn cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <SlidersHorizontal size={15} strokeWidth={1.75} /> More
+          </summary>
+          <div className="absolute right-0 z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border border-edge bg-card p-4 shadow-lg">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label" htmlFor="created_from">Created from</label>
+                <input id="created_from" type="date" name="created_from" defaultValue={filter.created_from ?? ""} className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="created_to">Created to</label>
+                <input id="created_to" type="date" name="created_to" defaultValue={filter.created_to ?? ""} className="input" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="awaiting" value="1" defaultChecked={!!filter.awaiting} /> Only leads awaiting follow-up
+            </label>
+          </div>
+        </details>
+        <div className="ml-auto flex items-center gap-1.5">
           <Link href="/leads" className="btn-ghost">Clear</Link>
+          <button className="btn-primary">Apply</button>
         </div>
       </form>
 
@@ -155,22 +170,21 @@ function Select({ name, label, value, multi, options }: { name: string; label: s
   if (multi) {
     // a multi-value filter from a dashboard click: keep it as-is
     return (
-      <div>
-        <span className="label">{label}</span>
+      <span className="flex-[1_1_128px]">
         <input type="hidden" name={name} value={multi.join(",")} />
-        <div className="input truncate bg-paper text-muted" title={multi.join(", ")}>{multi.length} selected</div>
-      </div>
+        <span className="input flex items-center truncate bg-card-2 text-muted" title={multi.join(", ")}>{label}: {multi.length} selected</span>
+      </span>
     );
   }
   return (
-    <div>
-      <label className="label" htmlFor={name}>{label}</label>
-      <select id={name} name={name} defaultValue={value} className="input">
-        <option value="">Any</option>
+    <label className="flex-[1_1_128px]">
+      <span className="sr-only">{label}</span>
+      <select id={name} name={name} defaultValue={value} className={`input ${value ? "border-ink/30 text-ink" : "text-muted"}`}>
+        <option value="">{label}: any</option>
         {options.map(([v, l]) => (
           <option key={v} value={v}>{l}</option>
         ))}
       </select>
-    </div>
+    </label>
   );
 }

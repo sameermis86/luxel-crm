@@ -7,6 +7,7 @@ import { can } from "@/server/auth";
 import { MERGE_FIELDS, defaultChoices } from "@/server/leads/merge";
 import { fmtDateTime } from "@/lib/format";
 import { MergeForm } from "./merge-form";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -47,14 +48,15 @@ export default async function MergePage({ searchParams }: { searchParams: Promis
     values: Object.fromEntries(MERGE_FIELDS.map((f) => [f, show(f, (l as any)[f])])),
   });
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div>
-        <h1 className="text-3xl">Merge duplicates</h1>
-        <p className="mt-1 text-sm text-muted">
+    <div className="mx-auto max-w-5xl">
+      <PageHeader
+        eyebrow="Sales & CRM"
+        title="Merge duplicates"
+        description={<>
           Pick the record to keep, then choose each field. The other record keeps its ID ({merged.recordId} stays a working link), becomes read-only,
           and its history shows on the kept record. Open follow-ups move over.
-        </p>
-      </div>
+        </>}
+      />
       <MergeForm
         a={side(survivor)}
         b={side(merged)}

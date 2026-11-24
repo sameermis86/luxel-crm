@@ -24,7 +24,7 @@ export function EditDetails({ lead, readOnly }: { lead: L; readOnly: boolean }) 
     return (
       <section className="card p-4 text-sm">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg">Details</h2>
+          <h2 className="text-[17px]">Details</h2>
           {!readOnly && <button className="btn py-0.5 text-xs" onClick={() => setEditing(true)}>Edit</button>}
         </div>
         {state?.ok && <p className="mb-2 text-xs text-stem">{state.message}</p>}
@@ -53,7 +53,7 @@ export function EditDetails({ lead, readOnly }: { lead: L; readOnly: boolean }) 
   );
   return (
     <form action={action} className="card grid grid-cols-2 gap-2 p-4 text-sm">
-      <h2 className="col-span-2 text-lg">Edit details</h2>
+      <h2 className="col-span-2 text-[17px]">Edit details</h2>
       <F name="firstName" label="First name" value={lead.firstName} />
       <F name="lastName" label="Last name" value={lead.lastName} />
       <F name="partnerName" label="Partner" value={lead.partnerName} span />

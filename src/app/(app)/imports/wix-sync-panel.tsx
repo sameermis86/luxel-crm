@@ -19,10 +19,10 @@ export function WixSyncPanel({ status, canRun }: { status: SyncStatus; canRun: b
   const [msg, setMsg] = useState<string | null>(null);
   const r = status.lastResult;
   return (
-    <section className="card p-4">
+    <section className="card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl">Wix sync</h2>
+          <h2 className="text-[19px]">Wix sync</h2>
           <p className="text-sm text-muted">
             Every 15 minutes the CRM pulls new submissions from your Wix forms and the Quote Builder. Past events and non-lead forms (job applications, newsletter) are skipped.
           </p>
@@ -43,7 +43,7 @@ export function WixSyncPanel({ status, canRun }: { status: SyncStatus; canRun: b
         )}
       </div>
       {!status.configured ? (
-        <p className="mt-2 text-sm text-amber">Not connected yet: add WIX_API_KEY in the Vercel project settings (see docs/wix-integration.md).</p>
+        <NotConnected>Add <code className="font-mono text-xs">WIX_API_KEY</code> in the Vercel project settings (see docs/wix-integration.md).</NotConnected>
       ) : (
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
           <div><dt className="text-muted">Last run</dt><dd>{fmt(status.lastRunAt)}</dd></div>
@@ -55,5 +55,14 @@ export function WixSyncPanel({ status, canRun }: { status: SyncStatus; canRun: b
       {status.lastError && <p className="mt-2 text-sm text-bloom">Last run failed: {status.lastError}</p>}
       {msg && <p className="mt-2 text-sm text-stem" role="status">{msg}</p>}
     </section>
+  );
+}
+
+export function NotConnected({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 flex gap-3 rounded-lg border border-amber/25 bg-amber-soft/70 px-3.5 py-3 text-sm text-ink/80">
+      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber" aria-hidden />
+      <p><span className="font-medium text-amber">Not connected yet.</span> {children}</p>
+    </div>
   );
 }

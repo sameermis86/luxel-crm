@@ -5,6 +5,7 @@ import { addDaysToDate, dateInTz } from "@/lib/dates";
 import { fmtDate } from "@/lib/format";
 import { configuredCalendars } from "@/server/integrations/goodshuffle";
 import { SyncOpsButton } from "./sync-button";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -24,23 +25,23 @@ export default async function OpsBoard({ searchParams }: { searchParams: SP }) {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted uppercase">Fulfillment & Ops</p>
-          <h1 className="mt-0.5 text-3xl">Event board</h1>
-          <p className="mt-1 text-sm text-muted">Signed Goodshuffle contracts: pull sheets, setup and teardown for each event.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <nav aria-label="Events shown" className="inline-flex rounded-md border border-edge bg-card p-0.5 text-sm">
-            {(Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((v) => (
-              <Link key={v} href={`/ops?view=${v}`} aria-current={v === view ? "page" : undefined} className={`rounded px-2.5 py-1 ${v === view ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}>
-                {VIEWS[v]}
-              </Link>
-            ))}
-          </nav>
-          {connected && <SyncOpsButton />}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Fulfillment & Ops"
+        title="Event board"
+        description="Every signed Goodshuffle contract, with its pull sheet, setup and teardown."
+        actions={
+          <>
+            <nav aria-label="Events shown" className="seg">
+              {(Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((v) => (
+                <Link key={v} href={`/ops?view=${v}`} aria-current={v === view ? "page" : undefined} className="seg-item">
+                  {VIEWS[v]}
+                </Link>
+              ))}
+            </nav>
+            {connected && <SyncOpsButton />}
+          </>
+        }
+      />
 
       {!connected && events.length === 0 ? (
         <p className="card p-6 text-sm text-muted">Connect Goodshuffle&apos;s Signed and Action Needed calendars (Import → Goodshuffle Pro) to fill the board.</p>

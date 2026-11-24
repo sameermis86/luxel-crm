@@ -35,15 +35,15 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZo
 
 /** Setmore consultations: who is booked to meet soon, and who met recently. */
 export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(data.configured); // a not-yet-connected panel stays a one-line note
   return (
     <section className="card" aria-labelledby="consult-h">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] px-5 py-3.5 text-left transition-colors hover:bg-card-2">
         <span className="flex items-baseline gap-2">
-          <h2 id="consult-h" className="text-lg">Consultations</h2>
-          <span className="text-xs text-muted">from Setmore{data.configured && data.upcomingTotal ? ` · ${data.upcomingTotal} coming up` : ""}</span>
+          <h2 id="consult-h" className="text-[17px]">Consultations</h2>
+          <span className="text-xs text-muted">from Setmore{data.configured ? (data.upcomingTotal ? ` · ${data.upcomingTotal} coming up` : "") : " · not connected yet"}</span>
         </span>
-        <span className="text-xs text-muted" aria-hidden>{open ? "Hide" : "Show"}</span>
+        <span className="text-xs font-medium text-muted" aria-hidden>{open ? "Hide" : data.configured ? "Show" : "Details"}</span>
       </button>
 
       {open && (

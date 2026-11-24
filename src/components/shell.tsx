@@ -258,7 +258,7 @@ export function Shell(props: ShellProps) {
         </div>
       </div>
 
-      <main id="main" className="mx-auto w-full max-w-[1320px] px-4 pt-6 pb-10 sm:px-6 lg:px-10 lg:pt-9">
+      <main id="main" className="mx-auto w-full max-w-[1320px] min-w-0 overflow-x-clip px-4 pt-6 pb-10 sm:px-6 lg:px-10 lg:pt-9">
         {props.children}
         <footer className="mt-16 flex flex-col gap-2 border-t border-edge pt-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between print:hidden">
           <span className="inline-flex items-center gap-2"><Logo size={18} /><span className="text-faint">·</span> Decor &amp; Flowers, Vaughan, Ontario</span>

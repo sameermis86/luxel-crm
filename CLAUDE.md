@@ -18,9 +18,17 @@ Luxel Decor & Flowers (Vaughan, ON) operations app, organised by division: **Sal
 - **Ops data comes from Goodshuffle; the team's work is ours.** The Ops sync may update Goodshuffle-sourced fields and flag removed lines, but never overwrites ticks, notes, or items/tasks the team added.
 - Dates: business days and "today" are America/Toronto. Use `src/lib/dates.ts`.
 
-## Design system
+## Design system ("the atelier")
 
-StemLedger's "cold storage + cut stem": ink #1B2420, bloom #BC5468, stem #5F8568, sage #8AA890, paper #F4F2EC, card #FFFFFF, edge #DCD6CB, muted #7B786F; Georgia-class serif headings, system sans for data. Chart colors are in `src/lib/chart-colors.ts` (validated for color-vision deficiency; re-run the validator if you change them).
+Tokens live in `src/app/globals.css` (`@theme`); pages never hard-code colours, shadows or radii.
+- Palette (brand, unchanged identity): ink #17201C, bloom #BC5468 (accent: primary create actions, alerts), stem #5F8568 / stem-strong #456A50 (success, text on soft green), sage #8AA890, amber #9C6A1E. Surfaces: paper #F5F3EE (canvas), paper-2 (sunken), card #FFF, card-2 #FAF9F6 (table heads, insets). Lines: edge #E5E0D6, edge-strong #D3CCBF. Text: ink, muted #646158 (secondary, ≥4.5:1), faint (placeholders/decoration only).
+- Type: Fraunces (display serif: page titles, section titles, big numbers) + Geist (UI). Page title 28/34px, section 19px, card heading 17px, body 14px, captions 12–13px. Eyebrows are the only uppercase text.
+- Shape & depth: controls 8px radius, cards 12px, pills full; shadow-xs on cards/controls, shadow-lg only for popovers/drawers.
+- Components (utilities in globals.css): `btn`, `btn-primary` (ink), `btn-bloom` (one primary create action per screen), `btn-ghost`, `btn-danger`, `btn-sm`; `input` (also selects/textarea/file), `label`, `hint`; `card`, `eyebrow`; `chip`; `th`/`td`; `seg`/`seg-item` (segmented control, `aria-current="page"` marks the active item); `.check-chip` (checkbox as a toggle pill). Status colours come from `STATUS_TONE` in `src/components/badges.tsx`.
+- Layout: `Shell` (`src/components/shell.tsx`): desktop sidebar (division switcher, section nav, notifications, user) and a phone top bar + drawer; every page starts with `PageHeader` (`src/components/page-header.tsx`). Icons: lucide-react, 15–17px, stroke 1.75.
+- Wide tables get a stacked list on phones (see leads) or scroll inside their card; the page itself never scrolls sideways.
+- Motion ~150ms ease-out; respect `prefers-reduced-motion`. Focus ring: 2px bloom.
+- Chart colours are in `src/lib/chart-colors.ts` (validated for colour-vision deficiency; re-run the validator if you change them).
 
 ## After each change
 

@@ -13,6 +13,7 @@ import { WixSyncPanel } from "./wix-sync-panel";
 import { getSyncState } from "@/server/intake/wix-sync";
 import { GoodshufflePanel } from "./goodshuffle-panel";
 import { configuredCalendars, getGsState, getGsSettings } from "@/server/integrations/goodshuffle";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // "Sync now" can import a backlog
@@ -33,12 +34,11 @@ export default async function ImportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl">Import leads</h1>
-        <p className="mt-1 text-sm text-muted">
-          Upload a CSV, check the column mapping, preview, then import. Re-importing the same file creates nothing new.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Sales & CRM"
+        title="Import & sync"
+        description="Leads arrive from Wix and Goodshuffle on their own; upload a CSV for anything else. Re-importing the same file creates nothing new."
+      />
 
       <WixSyncPanel
         canRun={can(page.session, "imports:create")}

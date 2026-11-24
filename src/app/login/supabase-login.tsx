@@ -23,17 +23,18 @@ export function SupabaseLogin({ url, anonKey }: { url: string; anonKey: string }
   }
 
   return (
-    <form onSubmit={signIn} className="mt-6 space-y-3">
+    <form onSubmit={signIn} className="mt-8 space-y-4">
       <div>
         <label className="label" htmlFor="email">Email</label>
-        <input id="email" type="email" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input id="email" type="email" required autoComplete="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
       <div>
-        <label className="label" htmlFor="password">Password (leave blank for a magic link)</label>
-        <input id="password" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <label className="label" htmlFor="password">Password</label>
+        <input id="password" type="password" className="input" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <p className="hint">Leave blank and we&apos;ll email you a sign-in link.</p>
       </div>
-      <button className="btn-primary w-full py-2" disabled={busy}>{password ? "Sign in" : "Email me a link"}</button>
-      {msg && <p className="text-sm text-muted">{msg}</p>}
+      <button className="btn-primary h-10 w-full" disabled={busy}>{busy ? "Signing in…" : password ? "Sign in" : "Email me a sign-in link"}</button>
+      {msg && <p className="rounded-lg border border-edge bg-card-2 px-3 py-2 text-sm text-ink/80" role="status">{msg}</p>}
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft, CalendarClock, UserRound } from "lucide-react";
 import { notFound } from "next/navigation";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
@@ -35,17 +36,17 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {sp.seen && <MarkSeen id={sp.seen} />}
       {mergedInto && (
-        <div className="card border-amber/50 bg-amber-soft p-3 text-sm">
+        <div className="rounded-xl border border-amber/30 bg-amber-soft px-4 py-3 text-sm">
           This record was merged into{" "}
           <Link className="font-medium underline" href={`/leads/${mergedInto.id}`}>{mergedInto.recordId}</Link>. It is read-only and kept so old links still work.
         </div>
       )}
-      {lead.archivedAt && <div className="card border-edge bg-paper p-3 text-sm text-muted">Archived {fmtDateTime(lead.archivedAt)} (import undone). Read-only.</div>}
+      {lead.archivedAt && <div className="rounded-xl border border-edge bg-paper-2/60 px-4 py-3 text-sm text-muted">Archived {fmtDateTime(lead.archivedAt)} (import undone). Read-only.</div>}
       {duplicates.length > 0 && !readOnly && (
-        <div className="card border-amber/50 bg-amber-soft/60 p-3 text-sm">
+        <div className="rounded-xl border border-amber/30 bg-amber-soft/70 px-4 py-3 text-sm">
           <p className="font-medium text-amber">Possible duplicate{duplicates.length > 1 ? "s" : ""}</p>
           <ul className="mt-1 space-y-1">
             {duplicates.map(({ d, other }) => (
@@ -53,7 +54,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
                 <Link href={`/leads/${other.id}`} className="underline">{other.recordId} {fullName(other)}</Link>
                 <span className="text-muted">{titleCase(other.eventType)} · {fmtDate(other.eventDate)} · {d.matchReasons.map((r) => MATCH_REASON_LABELS[r as MatchReason]).join(", ")}</span>
                 <span className={`chip ${d.confidence === "high" ? "border-bloom/40 text-bloom" : "border-amber/40 text-amber"}`}>{d.confidence}</span>
-                {can(page.session, "leads:merge") && <Link className="btn py-0.5 text-xs" href={`/leads/merge?a=${lead.id}&b=${other.id}`}>Merge…</Link>}
+                {can(page.session, "leads:merge") && <Link className="btn btn-sm" href={`/leads/merge?a=${lead.id}&b=${other.id}`}>Merge…</Link>}
                 <DismissDuplicateButton candidateId={d.id} leadId={lead.id} />
               </li>
             ))}
@@ -62,21 +63,23 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
       )}
 
       {/* Header */}
-      <header className="card p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <header className="pb-2">
+        <Link href="/leads" className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-ink"><ArrowLeft size={14} /> Leads</Link>
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs tracking-wide text-muted tabular">{lead.recordId}</p>
-            <h1 className="mt-0.5 truncate text-3xl">
+            <p className="font-mono text-xs text-muted">{lead.recordId}</p>
+            <h1 className="mt-1 text-[30px] sm:text-[36px]">
               {fullName(lead)}
               {lead.partnerName && <span className="text-muted"> &amp; {lead.partnerName}</span>}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
               <StatusPill status={lead.status} />
-              <span className="text-muted">·</span>
-              <span>{owner ? <>Owner: <strong className="font-medium">{owner.name}</strong></> : <span className="text-bloom">Unassigned</span>}</span>
-              <span className="text-muted">·</span>
-              <span className={overdue ? "font-medium text-bloom" : ""}>
-                Next follow-up: {lead.nextFollowUpAt ? `${fmtDateTime(lead.nextFollowUpAt)} (${fmtRelative(lead.nextFollowUpAt, page.now)})` : "none"}
+              <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-edge bg-card px-2.5 text-xs">
+                <UserRound size={12} className="text-muted" />{owner ? owner.name : <span className="text-bloom-strong">Unassigned</span>}
+              </span>
+              <span className={`inline-flex h-[22px] items-center gap-1.5 rounded-full border px-2.5 text-xs ${overdue ? "border-bloom/30 bg-bloom-soft font-medium text-bloom-strong" : "border-edge bg-card"}`}>
+                <CalendarClock size={12} className={overdue ? "" : "text-muted"} />
+                {lead.nextFollowUpAt ? `Follow up ${fmtRelative(lead.nextFollowUpAt, page.now)} · ${fmtDateTime(lead.nextFollowUpAt)}` : "No follow-up set"}
               </span>
             </div>
             {lead.status === "lost" && lead.lostReason && <p className="mt-1 text-sm text-muted">Lost: {LOST_REASON_LABELS[lead.lostReason]}{lead.lostReasonDetail ? `: ${lead.lostReasonDetail}` : ""}</p>}
@@ -96,14 +99,14 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
         )}
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Timeline */}
-        <section className="card p-4">
+        <section className="card p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl">Timeline</h2>
-            <nav className="flex gap-1 text-sm" aria-label="Timeline filter">
+            <h2 className="text-[19px]">Timeline</h2>
+            <nav className="seg" aria-label="Timeline filter">
               {(["all", "activities", "changes"] as const).map((k) => (
-                <Link key={k} href={`/leads/${lead.id}?tl=${k}`} className={`rounded-md px-2 py-1 ${tl === k ? "bg-ink text-paper" : "hover:bg-ink/5"}`}>
+                <Link key={k} href={`/leads/${lead.id}?tl=${k}`} aria-current={tl === k ? "page" : undefined} className="seg-item text-[13px]">
                   {k === "all" ? "All" : k === "activities" ? "Activities" : "Field changes"}
                 </Link>
               ))}
@@ -138,7 +141,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           />
 
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Source</h2>
+            <h2 className="mb-3 text-[17px]">Source</h2>
             <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-1">
               <dt className="text-muted">Origin</dt><dd>{titleCase(lead.source)}</dd>
               <dt className="text-muted">Channel</dt><dd>{titleCase(lead.captureChannel)}</dd>
@@ -152,7 +155,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           </section>
 
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Quote</h2>
+            <h2 className="mb-3 text-[17px]">Quote</h2>
             <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-1 tabular">
               <dt className="text-muted">Quote sent</dt><dd>{lead.proposalSentAt ? fmtDateTime(lead.proposalSentAt) : "not yet"}</dd>
               <dt className="text-muted">Quote value</dt><dd>{fmtMoney(lead.quoteValue)}</dd>
@@ -161,7 +164,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           </section>
 
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Follow-ups</h2>
+            <h2 className="mb-3 text-[17px]">Follow-ups</h2>
             {followUps.length === 0 && <p className="text-muted">None yet.</p>}
             <ul className="space-y-2">
               {followUps.slice(-8).map(({ f, ownerName }) => (

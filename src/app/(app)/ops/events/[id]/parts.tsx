@@ -96,19 +96,21 @@ export function PullSheet({ eventId, items, removed, printedSheet }: { eventId: 
       {areas.length === 0 && <p className="card p-6 text-sm text-muted">No items on this project in Goodshuffle.</p>}
       {areas.map((area) => (
         <section key={area} className="card overflow-hidden break-inside-avoid">
-          <h2 className="border-b border-edge bg-paper/50 px-4 py-2 text-lg">{area}</h2>
-          <table className="w-full">
-            <thead><tr><th className="th">Item</th><th className="th w-16 text-right">Qty</th><th className="th w-20 text-center">Pulled</th><th className="th w-20 text-center">Loaded</th><th className="th w-20 text-center">Returned</th><th className="th w-20 print:hidden" /></tr></thead>
+          <h2 className="border-b border-edge px-5 py-3 text-[17px]">{area}</h2>
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px]">
+            <thead className="bg-card-2"><tr><th className="th">Item</th><th className="th w-14 text-right">Qty</th><th className="th w-16 text-center">Pulled</th><th className="th w-16 text-center">Loaded</th><th className="th w-20 text-center">Returned</th><th className="th w-16 print:hidden" /></tr></thead>
             <tbody className="divide-y divide-edge">
               {roots(area).flatMap((i) => [row(i), ...kids(i.id).map((k) => row(k, true)), <AddRow key={`add-${i.id}`} eventId={eventId} parentId={i.id} area={area} label={`Add a piece to ${i.name}`} act={act} />])}
               <AddRow eventId={eventId} parentId={null} area={area} label={`Add another item to ${area}`} act={act} />
             </tbody>
           </table>
+          </div>
         </section>
       ))}
       {logistics.length > 0 && (
         <section className="card p-4 text-sm">
-          <h2 className="mb-1 text-lg">Logistics</h2>
+          <h2 className="mb-1 text-[17px]">Logistics</h2>
           <ul className="list-disc pl-5">{logistics.map((l) => <li key={l.id}>{l.name}{l.qty !== 1 ? ` × ${l.qty}` : ""}</li>)}</ul>
         </section>
       )}
@@ -203,7 +205,7 @@ export function Checklist({ eventId, phase, tasks, returns }: {
       <div className="grid gap-4 md:grid-cols-2">
         {areas.map((a) => (
           <section key={a} className="card break-inside-avoid p-4">
-            <h2 className="mb-2 text-lg">{a}</h2>
+            <h2 className="mb-3 text-[17px]">{a}</h2>
             <ul className="space-y-1.5">
               {tasks.filter((t) => t.area === a).map((t) => (
                 <li key={t.id}>
@@ -235,7 +237,7 @@ export function Checklist({ eventId, phase, tasks, returns }: {
 
       {phase === "teardown" && returns.length > 0 && (
         <section className="card overflow-hidden">
-          <h2 className="border-b border-edge bg-paper/50 px-4 py-2 text-lg">Count back in</h2>
+          <h2 className="border-b border-edge px-5 py-3 text-[17px]">Count back in</h2>
           <table className="w-full">
             <thead><tr><th className="th">Item</th><th className="th">Area</th><th className="th w-16 text-right">Qty</th><th className="th w-24 text-center">Returned</th></tr></thead>
             <tbody className="divide-y divide-edge">

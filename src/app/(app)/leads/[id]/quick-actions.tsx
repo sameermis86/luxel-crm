@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowRightLeft, CalendarClock, Mail, Phone, StickyNote, UserRound, Users, type LucideIcon } from "lucide-react";
+
 import { useActionState, useEffect, useState } from "react";
 import type { Status } from "@/db/schema";
 import { LOST_REASONS } from "@/db/schema";
@@ -27,29 +29,41 @@ export function QuickActions(props: {
   const [panel, setPanel] = useState<Panel>(null);
   const [prompt, setPrompt] = useState<string | null>(null); // suggested next follow-up after an activity
 
-  const buttons: [Panel, string][] = [
-    ["call", "Log call"],
-    ["email", "Log email"],
-    ["meeting", "Log meeting"],
-    ["note", "Add note"],
-    ["follow_up", "Set follow-up"],
-    ["status", "Change status"],
-    ["reassign", "Reassign"],
+  // what you do most (log a touchpoint) first; record-keeping actions after a divider
+  const log: [Panel, string, LucideIcon][] = [
+    ["call", "Log call", Phone],
+    ["email", "Log email", Mail],
+    ["meeting", "Log meeting", Users],
+    ["note", "Add note", StickyNote],
   ];
+  const manage: [Panel, string, LucideIcon][] = [
+    ["follow_up", "Set follow-up", CalendarClock],
+    ["status", "Change status", ArrowRightLeft],
+    ["reassign", "Reassign", UserRound],
+  ];
+  const btn = ([k, label, Icon]: [Panel, string, LucideIcon], primary = false) => (
+    <button
+      key={k}
+      type="button"
+      onClick={() => { setPanel(panel === k ? null : k); setPrompt(null); }}
+      className={`${primary && panel !== k ? "btn-primary" : "btn"} ${panel === k ? "border-ink/40 bg-card-2 ring-2 ring-ink/10" : ""}`}
+      aria-expanded={panel === k}
+    >
+      <Icon size={15} strokeWidth={1.75} /> {label}
+    </button>
+  );
 
   return (
-    <div className="mt-4 border-t border-edge pt-3">
-      <div className="flex flex-wrap gap-2">
-        {buttons.map(([k, label]) => (
-          <button key={k} type="button" onClick={() => { setPanel(panel === k ? null : k); setPrompt(null); }} className={panel === k ? "btn-primary" : "btn"} aria-expanded={panel === k}>
-            {label}
-          </button>
-        ))}
+    <div className="mt-5">
+      <div className="flex flex-wrap items-center gap-2">
+        {log.map((b, i) => btn(b, i === 0))}
+        <span className="mx-1 hidden h-6 w-px bg-edge-strong sm:block" aria-hidden />
+        {manage.map((b) => btn(b))}
       </div>
 
       {prompt && panel === null && (
-        <div className="mt-3 rounded-md border border-stem/40 bg-stem-soft/60 p-3 text-sm">
-          <p className="mb-2 font-medium text-stem">Logged. When's the next follow-up?</p>
+        <div className="mt-4 rounded-xl border border-stem/30 bg-stem-soft/60 p-4 text-sm">
+          <p className="mb-3 font-medium text-stem-strong">Logged. When's the next follow-up?</p>
           <FollowUpForm leadId={props.leadId} defaultDue={prompt} users={props.users} ownerId={props.ownerId} onDone={() => setPrompt(null)} />
         </div>
       )}
@@ -93,7 +107,7 @@ function ActivityForm({ leadId, kind, onDone }: { leadId: string; kind: "call" |
     onDone(r.ok && r.data?.suggestFollowUp ? toLocalInput(new Date(r.data.suggestedAt)) : null),
   );
   return (
-    <form action={run} className="mt-3 grid gap-3 rounded-md border border-edge bg-paper/50 p-3 sm:grid-cols-4">
+    <form action={run} className="mt-3 grid gap-3 rounded-xl border border-edge bg-card-2 p-4 sm:grid-cols-4">
       <input type="hidden" name="kind" value={kind} />
       {kind !== "note" && (
         <>
@@ -135,7 +149,7 @@ function ActivityForm({ leadId, kind, onDone }: { leadId: string; kind: "call" |
 function FollowUpForm({ leadId, defaultDue, users, ownerId, onDone }: { leadId: string; defaultDue: string; users: { id: string; name: string }[]; ownerId: string | null; onDone: () => void }) {
   const { state, run, pending } = useFormAction(setFollowUpAction.bind(null, leadId), onDone);
   return (
-    <form action={run} className="grid gap-3 rounded-md border border-edge bg-paper/50 p-3 sm:grid-cols-4">
+    <form action={run} className="grid gap-3 rounded-xl border border-edge bg-card-2 p-4 sm:grid-cols-4">
       <label className="block">
         <span className="label">Due</span>
         <input type="datetime-local" name="dueAt" defaultValue={defaultDue} className="input" required />
@@ -165,7 +179,7 @@ function StatusForm(props: { leadId: string; allowed: { value: Status; label: st
   const { state, run, pending } = useFormAction(changeStatusAction.bind(null, props.leadId), props.onDone);
   const closing = ["won", "lost", "unqualified", "not_reachable"].includes(to);
   return (
-    <form action={run} className="mt-3 grid gap-3 rounded-md border border-edge bg-paper/50 p-3 sm:grid-cols-4">
+    <form action={run} className="mt-3 grid gap-3 rounded-xl border border-edge bg-card-2 p-4 sm:grid-cols-4">
       <label className="block">
         <span className="label">Move to</span>
         <select name="status" className="input" value={to} onChange={(e) => setTo(e.target.value as Status)}>
@@ -227,7 +241,7 @@ function StatusForm(props: { leadId: string; allowed: { value: Status; label: st
 function ReassignForm(props: { leadId: string; users: { id: string; name: string }[]; ownerId: string | null; onDone: () => void }) {
   const { state, run, pending } = useFormAction(reassignAction.bind(null, props.leadId), props.onDone);
   return (
-    <form action={run} className="mt-3 flex flex-wrap items-end gap-3 rounded-md border border-edge bg-paper/50 p-3">
+    <form action={run} className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-edge bg-card-2 p-4">
       <label className="block">
         <span className="label">Owner</span>
         <select name="ownerId" className="input" defaultValue={props.ownerId ?? ""}>

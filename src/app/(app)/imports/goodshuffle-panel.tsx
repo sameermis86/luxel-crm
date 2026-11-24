@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { STATUS_LABELS } from "@/lib/status";
 import type { Status } from "@/db/schema";
+import { NotConnected } from "./wix-sync-panel";
 import { goodshuffleRunAction, goodshuffleAutoApplyAction } from "./actions";
 
 export interface GsPanelData {
@@ -33,10 +34,10 @@ export function GoodshufflePanel({ data, isOwner }: { data: GsPanelData; isOwner
   const pendingChanges = data.changes.filter((c) => !c.applied);
 
   return (
-    <section className="card p-4">
+    <section className="card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl">Goodshuffle Pro</h2>
+          <h2 className="text-[19px]">Goodshuffle Pro</h2>
           <p className="text-sm text-muted">
             Reads Goodshuffle&apos;s Google Calendar sync and moves matching leads forward: Quote Sent → Proposal sent, Signed / Action Needed → Won, Lost → Lost. It never moves a lead backwards.
           </p>
@@ -76,9 +77,7 @@ export function GoodshufflePanel({ data, isOwner }: { data: GsPanelData; isOwner
       </div>
 
       {data.configured.length === 0 ? (
-        <p className="mt-2 text-sm text-amber">
-          Not connected yet: add the Goodshuffle calendars&apos; private iCal addresses in Vercel (GOODSHUFFLE_ICAL_QUOTE_SENT, GOODSHUFFLE_ICAL_SIGNED, GOODSHUFFLE_ICAL_ACTION_NEEDED, GOODSHUFFLE_ICAL_LOST).
-        </p>
+        <NotConnected>Add the Goodshuffle calendars&apos; private iCal addresses in Vercel (GOODSHUFFLE_ICAL_QUOTE_SENT, GOODSHUFFLE_ICAL_SIGNED, GOODSHUFFLE_ICAL_ACTION_NEEDED, GOODSHUFFLE_ICAL_LOST).</NotConnected>
       ) : (
         <>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-5">

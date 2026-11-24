@@ -85,9 +85,35 @@ export function LeadsTable(props: {
           }}
         />
       )}
-      <div className="card overflow-x-auto">
+      {/* phones: a stacked list (the table needs ~1000px) */}
+      <ul className="card divide-y divide-edge md:hidden">
+        {rows.length === 0 && <li className="px-4 py-12 text-center text-sm text-muted">No leads match these filters.</li>}
+        {rows.map((r) => {
+          const overdue = r.nextFollowUpAt && new Date(r.nextFollowUpAt) < now && !["won", "lost", "unqualified", "not_reachable"].includes(r.status);
+          return (
+            <li key={r.id} className="px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <Link href={`/leads/${r.id}`} className="min-w-0">
+                  <span className="block truncate font-medium">{[r.firstName, r.lastName].filter(Boolean).join(" ") || "(no name)"}{r.partnerName && <span className="font-normal text-muted"> &amp; {r.partnerName}</span>}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted">
+                    <span className="font-mono">{r.recordId}</span> · {titleCase(r.eventType)} · {fmtDate(r.eventDate)}
+                  </span>
+                </Link>
+                <StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                <span>{r.ownerName ?? "Unassigned"}</span>
+                <span className={overdue ? "font-medium text-bloom-strong" : ""}>Follow-up {r.nextFollowUpAt ? fmtRelative(r.nextFollowUpAt, now) : "none"}</span>
+                {r.nextConsultAt && <span className="text-stem-strong">Consult {new Date(r.nextConsultAt).toLocaleDateString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric" })}</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="card hidden overflow-x-auto md:block">
         <table className="w-full min-w-[980px] border-collapse">
-          <thead className="border-b border-edge bg-paper/60">
+          <thead className="sticky top-0 z-10 border-b border-edge bg-card-2">
             <tr>
               {props.canBulk && (
                 <th className="th w-8">
@@ -116,28 +142,28 @@ export function LeadsTable(props: {
           <tbody className="divide-y divide-edge">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={COLS.length + 1} className="td py-10 text-center text-muted">
-                  No leads match these filters.
+                <td colSpan={COLS.length + 1} className="td py-16 text-center text-muted">
+                  No leads match these filters. Try clearing one, or search by name.
                 </td>
               </tr>
             )}
             {rows.map((r) => {
               const overdue = r.nextFollowUpAt && new Date(r.nextFollowUpAt) < now && !["won", "lost", "unqualified", "not_reachable"].includes(r.status);
               return (
-                <tr key={r.id} className="hover:bg-paper/50">
+                <tr key={r.id} className="transition-colors duration-100 hover:bg-card-2">
                   {props.canBulk && (
                     <td className="td">
                       <input type="checkbox" aria-label={`Select ${r.recordId}`} checked={allMatching || selected.has(r.id)} onChange={() => toggle(r.id)} />
                     </td>
                   )}
-                  <td className="td tabular whitespace-nowrap text-muted">
+                  <td className="td whitespace-nowrap font-mono text-xs text-muted">
                     <Link href={`/leads/${r.id}`} className="hover:text-ink">{r.recordId}</Link>
                   </td>
-                  <td className="td">
-                    <Link href={`/leads/${r.id}`} className="font-medium hover:underline">
+                  <td className="td min-w-[190px]">
+                    <Link href={`/leads/${r.id}`} className="block font-medium whitespace-nowrap transition-colors hover:text-bloom-strong">
                       {[r.firstName, r.lastName].filter(Boolean).join(" ") || "(no name)"}
                     </Link>
-                    {r.partnerName && <span className="text-muted"> &amp; {r.partnerName}</span>}
+                    {r.partnerName && <span className="block text-xs whitespace-nowrap text-muted">&amp; {r.partnerName}</span>}
                   </td>
                   <td className="td whitespace-nowrap">
                     {fmtDate(r.eventDate)}
@@ -148,7 +174,7 @@ export function LeadsTable(props: {
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
                   <td className="td whitespace-nowrap tabular">
                     {r.nextConsultAt ? (
-                      <span className="chip border-stem/30 bg-stem-soft text-stem" title="Booked in Setmore">
+                      <span className="chip border-stem/25 bg-stem-soft text-stem-strong" title="Booked in Setmore">
                         {new Date(r.nextConsultAt).toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                       </span>
                     ) : <span className="text-muted">—</span>}
@@ -185,7 +211,7 @@ function BulkBar(props: {
   }, null);
   const count = props.allMatching ? props.total : props.ids.length;
   return (
-    <form action={action} className="card flex flex-wrap items-end gap-3 border-ink/30 bg-ink/[0.03] p-3 text-sm">
+    <form action={action} className="sticky top-16 z-20 flex flex-wrap items-end gap-3 rounded-xl border border-ink bg-ink p-3 text-sm text-white shadow-lg lg:top-4 [&_.label]:text-white/70 [&_.input]:text-ink">
       {props.allMatching ? (
         <input type="hidden" name="scope" value="filter" />
       ) : (
@@ -195,7 +221,7 @@ function BulkBar(props: {
       <div className="font-medium">
         {count} selected
         {!props.allMatching && props.ids.length === props.pageCount && props.total > props.pageCount && (
-          <button type="button" className="ml-2 text-bloom underline" onClick={props.onSelectAllMatching}>
+          <button type="button" className="ml-2 text-white/80 underline underline-offset-2 hover:text-white" onClick={props.onSelectAllMatching}>
             Select all {props.total} matching
           </button>
         )}
@@ -253,8 +279,8 @@ function BulkBar(props: {
           </div>
         </>
       )}
-      <button className="btn-primary" disabled={pending}>{pending ? "Working…" : "Apply"}</button>
-      <button type="button" className="btn-ghost" onClick={props.onDone}>Cancel</button>
+      <button className="btn border-white bg-white text-ink hover:bg-paper" disabled={pending}>{pending ? "Working…" : "Apply"}</button>
+      <button type="button" className="btn-ghost text-white hover:bg-white/10" onClick={props.onDone}>Cancel</button>
       {state && <span className={state.ok ? "text-stem" : "text-bloom"}>{state.ok ? state.message : state.error}</span>}
     </form>
   );

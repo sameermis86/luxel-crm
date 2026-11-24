@@ -7,6 +7,7 @@ import { titleCase } from "@/lib/format";
 import type { AssignmentConditions } from "@/lib/assignment";
 import { ActionForm, ActionButton } from "@/components/action-form";
 import { saveSettingsAction, resetSettingsAction, saveUserAction, saveRuleAction, deleteRuleAction } from "./actions";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -28,28 +29,25 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Settings</h1>
-          <p className="mt-1 text-sm text-muted">Owners only.</p>
-        </div>
-        <div className="flex gap-2">
-          <ActionButton action={resetSettingsAction} label="Reset to defaults" confirmText="Reset follow-up and business-hours settings to the defaults?" className="btn-ghost" />
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Owners only"
+        title="Settings"
+        description="Business hours, follow-up timing, the team and how new leads are assigned."
+        actions={<ActionButton action={resetSettingsAction} label="Reset to defaults" confirmText="Reset follow-up and business-hours settings to the defaults?" className="btn-ghost" />}
+      />
 
       <ActionForm action={saveSettingsAction} submitLabel="Save settings" className="space-y-6">
 
         {/* Follow-ups */}
-        <section className="card p-4">
-          <h2 className="text-xl">Business hours &amp; follow-ups</h2>
+        <section className="card p-5">
+          <h2 className="text-[19px]">Business hours &amp; follow-ups</h2>
           <div className="mt-3 flex flex-wrap items-end gap-4">
             <input type="hidden" name="businessHours.timezone" value={s.businessHours.timezone} />
             <fieldset>
               <legend className="label">Working days</legend>
-              <div className="flex gap-2 text-sm">
+              <div className="flex flex-wrap gap-1.5">
                 {DAYS.map((d, i) => (
-                  <label key={d} className="flex items-center gap-1">
+                  <label key={d} className="check-chip">
                     <input type="checkbox" name="businessHours.days" value={i} defaultChecked={s.businessHours.days.includes(i)} /> {d}
                   </label>
                 ))}
@@ -72,8 +70,8 @@ export default async function SettingsPage() {
       </ActionForm>
 
       {/* Users */}
-      <section className="card p-4">
-        <h2 className="text-xl">Users</h2>
+      <section className="card p-5">
+        <h2 className="text-[19px]">Users</h2>
         <p className="text-xs text-muted">Owners: everything. Managers: all leads, no settings. Staff: their own leads plus unassigned ones (enforced in the database too).</p>
         <div className="mt-3 space-y-2">
           {[...people, null].map((u) => (
@@ -95,8 +93,8 @@ export default async function SettingsPage() {
       </section>
 
       {/* Assignment rules */}
-      <section className="card p-4">
-        <h2 className="text-xl">Assignment rules</h2>
+      <section className="card p-5">
+        <h2 className="text-[19px]">Assignment rules</h2>
         <p className="text-xs text-muted">Checked in priority order (lowest number first); the first matching rule wins. Empty conditions match everything. A rule pointing at someone who isn't receiving leads is skipped.</p>
         <div className="mt-3 space-y-3">
           {[...rules, null].map((r) => {
@@ -152,7 +150,7 @@ function Checks({ name, label, options, selected }: { name: string; label: strin
       <div className="flex flex-wrap gap-1.5">
         {options.length === 0 && <span className="text-xs text-muted">none yet</span>}
         {options.map(([v, l]) => (
-          <label key={v} className="chip cursor-pointer border-edge bg-paper font-normal">
+          <label key={v} className="check-chip">
             <input type="checkbox" name={name} value={v} defaultChecked={selected.includes(v)} /> {l}
           </label>
         ))}

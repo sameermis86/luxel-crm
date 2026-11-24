@@ -7,6 +7,8 @@ import { fmtDate, titleCase } from "@/lib/format";
 import { SOURCES, EVENT_TYPES } from "@/db/schema";
 import { TrendChart } from "@/components/dashboard-charts";
 import { C } from "@/lib/chart-colors";
+import { PageHeader } from "@/components/page-header";
+import { ArrowRight, SlidersHorizontal } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -40,43 +42,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   const pipeMax = Math.max(1, ...d.pipeline.map((p) => p.value));
 
   return (
-    <div className="space-y-5">
-      {/* Header: greeting + range */}
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted uppercase">
-            {now.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: tz })}
-          </p>
-          <h1 className="mt-0.5 text-3xl">
-            {todoCount ? <>{todoCount} lead{todoCount === 1 ? "" : "s"} need you today</> : "You're all caught up"}
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <nav aria-label="Date range" className="inline-flex rounded-md border border-edge bg-card p-0.5 text-sm">
-            {RANGE_PILLS.map((r) => {
-              const sp2 = dashToParams({ ...df, range: r });
-              const active = df.range === r;
-              return (
-                <Link
-                  key={r}
-                  href={`/?${sp2}`}
-                  aria-current={active ? "page" : undefined}
-                  className={`rounded px-2.5 py-1 transition-colors duration-150 ${active ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
-                >
+    <div>
+      <PageHeader
+        eyebrow={now.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: tz })}
+        title={todoCount ? <>{todoCount} lead{todoCount === 1 ? "" : "s"} need you today</> : "You're all caught up"}
+        description={todoCount ? "Start with new inquiries and overdue follow-ups; the numbers below cover leads that came in " + rangeLabel.toLowerCase() + "." : `Here's how leads that came in ${rangeLabel.toLowerCase()} are doing.`}
+        actions={
+          <>
+            <nav aria-label="Date range" className="seg">
+              {RANGE_PILLS.map((r) => (
+                <Link key={r} href={`/?${dashToParams({ ...df, range: r })}`} aria-current={df.range === r ? "page" : undefined} className="seg-item">
                   {PILL_LABEL[r]}
                 </Link>
-              );
-            })}
-          </nav>
-          <FilterMenu df={df} users={users} one={one} filtersOn={filtersOn} />
-        </div>
-      </header>
+              ))}
+            </nav>
+            <FilterMenu df={df} users={users} one={one} filtersOn={filtersOn} />
+          </>
+        }
+      />
 
+      <div className="space-y-6">
       {/* Leads: total = sum of the channels */}
       <section className="card overflow-hidden" aria-labelledby="leads-h">
         <SectionHead id="leads-h" title="Leads" note={`came in · ${rangeLabel.toLowerCase()}`} />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:divide-x lg:divide-edge max-lg:[&>*]:border-b max-lg:[&>*]:border-edge">
-          <Kpi c={lead("leads")} sub={channels.map((c) => c.value).join(" + ") + " by channel"} strong />
+        <div className="grid grid-cols-2 border-t border-edge sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:divide-x lg:divide-edge max-lg:[&>*]:border-b max-lg:[&>*]:border-edge">
+          <Kpi c={lead("leads")} sub={`across ${channels.length} channels`} strong />
           {channels.map((c) => <Kpi key={c.key} c={c} sub={`${share(c.value, leadsN)} of leads`} swatch={C[c.key as keyof typeof C]} />)}
           <Kpi c={lead("needs_follow_up")} sub={`${share(lead("needs_follow_up").value, leadsN)} of leads`} alert />
         </div>
@@ -85,7 +75,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
       {/* Quotes: total = sent + action needed + signed + lost; each as a share of total */}
       <section className="card overflow-hidden" aria-labelledby="quotes-h">
         <SectionHead id="quotes-h" title="Quotes" note={`Goodshuffle stage of those leads · ${share(quotesTotal.value, leadsN)} of leads got a quote`} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x sm:divide-edge max-sm:[&>*]:border-b max-sm:[&>*]:border-edge">
+        <div className="grid grid-cols-2 border-t border-edge sm:grid-cols-4 sm:divide-x sm:divide-edge max-sm:[&>*]:border-b max-sm:[&>*]:border-edge">
           <Kpi c={quotesTotal} sub={stages.map((q) => q.numerator!.value).join(" + ")} strong />
           {stages.map((q) => (
             <Kpi key={q.key} c={q} sub={`${q.numerator!.value} of ${q.denominator!.value} quotes`} swatch={C[q.key as keyof typeof C]} />
@@ -98,12 +88,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         )}
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Next best actions */}
         <section className="card" aria-labelledby="actions-h">
-          <div className="flex items-baseline justify-between border-b border-edge px-4 py-3">
-            <h2 id="actions-h" className="text-xl">Next best actions</h2>
-            <Link href="/follow-ups" className="text-sm text-muted hover:text-ink">Follow-ups →</Link>
+          <div className="flex items-baseline justify-between border-b border-edge px-5 pt-4 pb-3">
+            <h2 id="actions-h" className="text-[19px]">Next best actions</h2>
+            <Link href="/follow-ups" className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-ink">My follow-ups <ArrowRight size={14} /></Link>
           </div>
           {todo.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-muted">Nothing waiting. New inquiries and due follow-ups will show up here.</p>
@@ -122,17 +112,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
 
         <div className="space-y-5">
           {/* Live pipeline */}
-          <section className="card p-4" aria-labelledby="pipe-h">
+          <section className="card p-5" aria-labelledby="pipe-h">
             <div className="flex items-baseline justify-between">
-              <h2 id="pipe-h" className="text-lg">Open pipeline</h2>
+              <h2 id="pipe-h" className="text-[19px]">Open pipeline</h2>
               <span className="text-xs text-muted">right now</span>
             </div>
             <ul className="mt-3 space-y-2.5">
               {d.pipeline.map((p) => (
                 <li key={p.key}>
                   <Link href={p.href} className="group block">
-                    <div className="flex justify-between text-sm"><span className="group-hover:underline">{p.label}</span><span className="tabular">{p.value}</span></div>
-                    <div className="mt-1 h-1.5 rounded-full bg-paper"><div className="h-1.5 rounded-full" style={{ width: `${p.value ? Math.max(2, (p.value / pipeMax) * 100) : 0}%`, background: C.leads }} /></div>
+                    <div className="flex justify-between text-sm"><span className="text-ink/85 group-hover:text-ink">{p.label}</span><span className="tabular">{p.value}</span></div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-paper-2"><div className="h-1.5 rounded-full transition-[width] duration-500" style={{ width: `${p.value ? Math.max(2, (p.value / pipeMax) * 100) : 0}%`, background: C.leads }} /></div>
                   </Link>
                 </li>
               ))}
@@ -143,9 +133,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
       </div>
 
       {/* Trend */}
-      <section className="card p-4" aria-labelledby="trend-h">
+      <section className="card p-5" aria-labelledby="trend-h">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="trend-h" className="text-lg">Leads per {d.bucket}</h2>
+          <h2 id="trend-h" className="text-[19px]">Leads per {d.bucket}</h2>
           <span className="text-xs text-muted">by channel</span>
         </div>
         <TrendChart data={d.trend} />
@@ -158,7 +148,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
           ])}
         />
       </section>
-
+      </div>
     </div>
   );
 }
@@ -167,8 +157,8 @@ const TONE = { urgent: "bg-bloom", normal: "bg-amber", quiet: "bg-muted" } as co
 
 function SectionHead({ id, title, note }: { id: string; title: string; note: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2 border-b border-edge px-4 py-2.5">
-      <h2 id={id} className="text-lg">{title}</h2>
+    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 px-5 pt-4 pb-3">
+      <h2 id={id} className="text-[19px]">{title}</h2>
       <span className="text-xs text-muted">{note}</span>
     </div>
   );
@@ -176,33 +166,40 @@ function SectionHead({ id, title, note }: { id: string; title: string; note: str
 
 function Kpi({ c, sub, alert, strong, swatch }: { c: Dashboard["leadNums"][number]; sub: string; alert?: boolean; strong?: boolean; swatch?: string }) {
   return (
-    <Link href={c.href} title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value} className={`group block px-4 py-3.5 transition-colors duration-150 hover:bg-paper/60 ${strong ? "bg-paper/40" : ""}`}>
-      <div className="flex items-center gap-1.5 text-xs text-muted">
-        {swatch && <span className="inline-block h-2 w-2 rounded-sm" style={{ background: swatch }} aria-hidden />}
+    <Link
+      href={c.href}
+      title={c.definition}
+      data-metric={c.key}
+      data-value={c.numerator ? c.numerator.value : c.value}
+      className={`group relative block px-5 py-4 transition-colors duration-150 hover:bg-card-2 ${strong ? "bg-card-2/60" : ""}`}
+    >
+      <div className="flex items-center gap-1.5 text-[13px] text-muted">
+        {swatch && <span className="inline-block h-2 w-2 rounded-[3px]" style={{ background: swatch }} aria-hidden />}
         {c.label}
+        <ArrowRight size={13} className="ml-auto -translate-x-1 text-faint opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
       </div>
-      <div className={`mt-0.5 font-display text-[28px] leading-tight tabular ${alert && c.value > 0 ? "text-bloom" : ""}`}>{c.display}</div>
-      <div className="mt-0.5 truncate text-xs text-muted group-hover:text-ink">{sub}</div>
+      <div className={`mt-1.5 font-display leading-none tabular ${strong ? "text-[38px]" : "text-[32px]"} ${alert && c.value > 0 ? "text-bloom" : ""}`}>{c.display}</div>
+      <div className="mt-2 truncate text-xs text-muted">{sub}</div>
     </Link>
   );
 }
 
 function ActionGroup({ a, now, tz }: { a: Action; now: Date; tz: string }) {
   return (
-    <li className="px-4 py-3">
+    <li className="px-5 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`h-2 w-2 shrink-0 rounded-full ${TONE[a.tone]}`} aria-hidden />
-          <h3 className="truncate text-[15px] font-medium" style={{ fontFamily: "var(--font-sans)" }}>{a.title}</h3>
-          <span className="chip border-edge text-muted tabular">{a.count}</span>
+          <h3 className="truncate font-sans text-[15px] font-medium tracking-normal">{a.title}</h3>
+          <span className="rounded-full bg-paper-2 px-2 py-px text-xs font-medium text-ink/70 tabular">{a.count}</span>
         </div>
-        <Link href={a.href} className="shrink-0 text-sm text-muted hover:text-ink">{a.count > a.leads.length ? `All ${a.count}` : "Open list"} →</Link>
+        <Link href={a.href} className="inline-flex shrink-0 items-center gap-1 text-sm text-muted transition-colors hover:text-ink">{a.count > a.leads.length ? `All ${a.count}` : "Open list"} <ArrowRight size={14} /></Link>
       </div>
       <p className="mt-0.5 pl-4 text-xs text-muted">{a.hint}</p>
-      <ul className="mt-2 space-y-1 pl-4">
+      <ul className="mt-2.5 space-y-0.5 pl-4">
         {a.leads.map((l) => (
           <li key={l.id}>
-            <Link href={`/leads/${l.id}`} className="flex items-center gap-3 rounded-md px-2 py-1.5 -mx-2 hover:bg-paper">
+            <Link href={`/leads/${l.id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-card-2">
               <Initials name={l.ownerName} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">
@@ -263,10 +260,10 @@ function Initials({ name }: { name: string | null }) {
 function FilterMenu({ df, users, one, filtersOn }: { df: DashFilter; users: { id: string; name: string }[]; one: (v?: string[]) => string; filtersOn: number }) {
   return (
     <details className="relative">
-      <summary className="btn cursor-pointer list-none">
-        Filters{filtersOn ? <span className="chip border-ink/20 bg-ink text-paper">{filtersOn}</span> : null}
+      <summary className="btn cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <SlidersHorizontal size={15} strokeWidth={1.75} /> Filters{filtersOn ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1 text-[11px] text-white">{filtersOn}</span> : null}
       </summary>
-      <form method="get" className="card absolute right-0 z-20 mt-1 w-72 space-y-3 p-3 shadow-lg">
+      <form method="get" className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-3.5 rounded-xl border border-edge bg-card p-4 shadow-lg">
         {df.range !== "custom" && <input type="hidden" name="range" value={df.range} />}
         <Sel name="owner" label="Owner" value={one(df.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
         <Sel name="source" label="Source" value={one(df.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
