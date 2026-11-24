@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { Download, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { ConsultationsPanel, type ConsultPanelData } from "./consultations";
 import { countLeads } from "@/server/leads/queries";
-import { getSetmoreState, listAppointments, setmoreConfigured } from "@/server/integrations/setmore";
+import { getSetmoreState, listAppointments, planConsultStatuses, setmoreConfigured } from "@/server/integrations/setmore";
 import { leadsHref } from "@/lib/lead-filters";
 import { SaveViewForm, DeleteViewButton } from "./saved-views";
 
@@ -35,14 +35,16 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
     const configured = setmoreConfigured();
     const day = 86_400_000;
     const upcomingFilter: LeadFilter = { consult: "upcoming" };
-    const [upcoming, recent, upcomingTotal, sm] = configured
+    const isOwner = can(p.session, "settings:manage");
+    const [upcoming, recent, upcomingTotal, sm, statusPlan] = configured
       ? await Promise.all([
           listAppointments(tx, p.now, new Date(p.now.getTime() + 30 * day), "asc", 6),
           listAppointments(tx, new Date(p.now.getTime() - 14 * day), p.now, "desc", 6),
           countLeads(tx, upcomingFilter, p.wc),
           getSetmoreState(p.session.orgId),
+          isOwner ? planConsultStatuses(tx, p.now) : Promise.resolve([]),
         ])
-      : [[], [], 0, {}];
+      : [[], [], 0, {}, []];
     const ser = (a: (typeof upcoming)[number]) => ({ ...a, startsAt: a.startsAt.toISOString() });
     const consult: ConsultPanelData = {
       configured,
@@ -52,6 +54,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
       upcomingTotal,
       recent: recent.map(ser),
       upcomingHref: leadsHref(upcomingFilter),
+      statusPlan: isOwner ? statusPlan : null,
     };
     return { rows, total, users, views, consult };
   });

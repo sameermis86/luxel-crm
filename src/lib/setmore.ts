@@ -1,4 +1,6 @@
 import { normalizeEmail, normalizePhone } from "./normalize";
+import type { Status } from "@/db/schema";
+import { FUNNEL_RANK } from "./status";
 
 /** Setmore API v2 shapes (only the fields we read). */
 export interface SmBooking {
@@ -84,5 +86,27 @@ export function matchLead(
     const m = leads.find((l) => l.phoneE164 === row.phoneE164);
     if (m) return m.id;
   }
+  return null;
+}
+
+/** Lead statuses a Setmore booking may move forward. Won/lost/unqualified/on hold are human decisions. */
+const BOOKING_MOVABLE: Status[] = ["new", "contacted", "not_reachable", "consult_scheduled"];
+
+/**
+ * Forward-only status a lead's bookings support, or null to leave it.
+ * A confirmed booking that has ended → Consult held; one still ahead → Consult scheduled.
+ * Cancelled bookings never move a lead.
+ */
+export function plannedConsultStatus(
+  current: Status,
+  bookings: { startsAt: Date; endsAt: Date | null; status: string }[],
+  now: Date,
+): { to: Status; startsAt: Date } | null {
+  if (!BOOKING_MOVABLE.includes(current)) return null;
+  const live = bookings.filter((b) => b.status === "confirmed");
+  const held = live.filter((b) => (b.endsAt ?? b.startsAt) <= now).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())[0];
+  if (held && current !== "consult_held") return { to: "consult_held", startsAt: held.startsAt };
+  const ahead = live.filter((b) => (b.endsAt ?? b.startsAt) > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0];
+  if (ahead && FUNNEL_RANK[current] < FUNNEL_RANK.consult_scheduled) return { to: "consult_scheduled", startsAt: ahead.startsAt };
   return null;
 }

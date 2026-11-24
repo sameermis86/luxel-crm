@@ -64,6 +64,7 @@ function title(e: TimelineEvent, users: Record<string, string>) {
     case "converted": return `Converted · ${fmtMoney(p.contractValue)} in ${p.daysToConvert} days`;
     case "returning_inquiry": return `Submitted again${p.form ? ` via ${p.form === "quote_builder" ? "Quote Builder" : "Contact Us"}` : ""}`;
     case "merged": return e.field === "duplicateOfId" ? "Merged into another record" : `Merged ${p.mergedRecordId ?? "a record"} into this lead`;
+    case "status_changed": return `${FIELD_LABELS.status ?? "Status"}${p.via === "setmore" ? " · from a Setmore booking" : p.via === "goodshuffle" ? " · from Goodshuffle" : ""}`;
     case "assigned": return e.newValue ? `Assigned to ${users[e.newValue] ?? "someone"}${p.ruleName ? ` (rule: ${p.ruleName})` : p.how === "manual" ? " manually" : ""}` : "Unassigned";
     default: return FIELD_LABELS[e.field ?? ""] ?? human(e.type);
   }

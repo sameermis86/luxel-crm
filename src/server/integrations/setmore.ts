@@ -1,12 +1,14 @@
 import { and, asc, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
-import { withCtx, systemCtx, type Tx } from "@/db/client";
-import { appointments, integrationState, leads } from "@/db/schema";
-import { bookingToRow, matchLead, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
+import { withCtx, systemCtx, type Ctx, type Tx } from "@/db/client";
+import { appointments, integrationState, leads, type Status } from "@/db/schema";
+import { bookingToRow, matchLead, plannedConsultStatus, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
+import { updateLead, LeadError } from "@/server/leads/service";
 
 /**
  * Setmore → CRM: copies appointments (60 days back, 120 ahead) into `appointments`
- * and links each to a lead by email/phone. Read-only on both sides: it never
- * changes Setmore, and it doesn't change lead statuses.
+ * and links each to a lead by email/phone. It never changes Setmore, and the sync
+ * itself doesn't change lead statuses: `planConsultStatuses` previews forward-only
+ * moves from the bookings and `applyConsultStatuses` makes them when an owner says so.
  */
 
 const BASE = "https://developer.setmore.com/api/v2";
@@ -194,4 +196,56 @@ export async function listAppointments(tx: Tx, from: Date, to: Date, order: "asc
     .where(and(gte(appointments.startsAt, from), lt(appointments.startsAt, to)))
     .orderBy(order === "asc" ? asc(appointments.startsAt) : desc(appointments.startsAt))
     .limit(limit);
+}
+
+export interface ConsultStatusChange {
+  leadId: string;
+  recordId: string;
+  name: string;
+  from: Status;
+  to: Status;
+  bookingAt: string;
+}
+
+/** Leads whose Setmore bookings support a forward move (see `plannedConsultStatus`). */
+export async function planConsultStatuses(tx: Tx, now = new Date()): Promise<ConsultStatusChange[]> {
+  const rows = await tx
+    .select({
+      leadId: leads.id,
+      recordId: leads.recordId,
+      first: leads.firstName,
+      last: leads.lastName,
+      status: leads.status,
+      startsAt: appointments.startsAt,
+      endsAt: appointments.endsAt,
+      apptStatus: appointments.status,
+    })
+    .from(appointments)
+    .innerJoin(leads, eq(leads.id, appointments.leadId))
+    .where(and(eq(appointments.source, "setmore"), isNull(leads.duplicateOfId), isNull(leads.archivedAt)));
+  const byLead = new Map<string, typeof rows>();
+  for (const r of rows) byLead.set(r.leadId, [...(byLead.get(r.leadId) ?? []), r]);
+  const out: ConsultStatusChange[] = [];
+  for (const [leadId, list] of byLead) {
+    const l = list[0];
+    const p = plannedConsultStatus(l.status, list.map((r) => ({ startsAt: r.startsAt, endsAt: r.endsAt, status: r.apptStatus })), now);
+    if (p) out.push({ leadId, recordId: l.recordId, name: [l.first, l.last].filter(Boolean).join(" ") || "(no name)", from: l.status, to: p.to, bookingAt: p.startsAt.toISOString() });
+  }
+  return out.sort((a, b) => a.bookingAt.localeCompare(b.bookingAt));
+}
+
+/** Applies the current plan through updateLead (audited, tagged via: "setmore"). Re-plans inside, so it's never stale. */
+export async function applyConsultStatuses(ctx: Ctx, now = new Date()) {
+  const plan = await withCtx(ctx, (tx) => planConsultStatuses(tx, now));
+  let applied = 0;
+  const errors: { recordId: string; error: string }[] = [];
+  for (const c of plan) {
+    try {
+      await withCtx(ctx, (tx) => updateLead(tx, ctx, c.leadId, { status: c.to }, { now, payload: { via: "setmore", bookingAt: c.bookingAt } }));
+      applied++;
+    } catch (e) {
+      errors.push({ recordId: c.recordId, error: e instanceof LeadError ? e.message : String((e as Error)?.message ?? e) });
+    }
+  }
+  return { planned: plan.length, applied, errors };
 }

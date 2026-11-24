@@ -402,3 +402,22 @@ export async function addLeadFromAppointmentAction(appointmentId: string): Promi
   if (res.ok) revalidatePath("/leads");
   return res.ok ? { ok: true, data: { leadId }, message: "Lead added" } : res;
 }
+
+/** Owners: move leads forward from their Setmore bookings (the plan shown in the Consultations panel). */
+export async function applyConsultStatusesAction(): Promise<ActionResult> {
+  const session = await requireSession();
+  let out = { planned: 0, applied: 0, errors: [] as { recordId: string; error: string }[] };
+  const res = await run(async () => {
+    authorize(session, "settings:manage");
+    const { applyConsultStatuses } = await import("@/server/integrations/setmore");
+    out = await applyConsultStatuses(ctxFor(session));
+  });
+  if (!res.ok) return res;
+  revalidatePath("/leads");
+  revalidatePath("/");
+  return {
+    ok: true,
+    data: out,
+    message: `Updated ${out.applied} lead${out.applied === 1 ? "" : "s"}${out.errors.length ? `; ${out.errors.length} couldn't move (${out.errors.slice(0, 3).map((e) => `${e.recordId}: ${e.error}`).join("; ")})` : ""}`,
+  };
+}

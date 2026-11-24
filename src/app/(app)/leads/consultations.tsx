@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Status } from "@/db/schema";
 import { StatusPill } from "@/components/badges";
-import { addLeadFromAppointmentAction } from "./actions";
+import { STATUS_LABELS } from "@/lib/status";
+import { addLeadFromAppointmentAction, applyConsultStatusesAction } from "./actions";
 
 export interface ConsultRow {
   id: string;
@@ -27,6 +28,8 @@ export interface ConsultPanelData {
   upcomingTotal: number;
   recent: ConsultRow[];
   upcomingHref: string;
+  /** Owners only: leads whose bookings support a forward status move. */
+  statusPlan: { leadId: string; recordId: string; name: string; from: string; to: string; bookingAt: string }[] | null;
 }
 
 const TZ = "America/Toronto";
@@ -36,6 +39,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZo
 /** Setmore consultations: who is booked to meet soon, and who met recently. */
 export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
   const [open, setOpen] = useState(data.configured); // a not-yet-connected panel stays a one-line note
+  const [planMsg, setPlanMsg] = useState<{ ok: boolean; text: string } | null>(null); // outlives the plan box, which empties on success
   return (
     <section className="card" aria-labelledby="consult-h">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] px-5 py-3.5 text-left transition-colors hover:bg-card-2">
@@ -53,6 +57,8 @@ export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
           ) : (
             <>
               {data.lastError && <p className="px-4 pt-3 text-sm text-bloom">Last sync failed: {data.lastError}</p>}
+              {data.statusPlan && data.statusPlan.length > 0 && <StatusPlan plan={data.statusPlan} onDone={setPlanMsg} />}
+              {planMsg && <p role="status" className={`border-b border-edge px-4 py-2 text-sm ${planMsg.ok ? "text-stem-strong" : "text-bloom"}`}>{planMsg.text}</p>}
               <div className="grid divide-edge md:grid-cols-2 md:divide-x">
                 <List
                   title="Coming up"
@@ -63,7 +69,7 @@ export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
                 <List title="Met in the last 14 days" empty="No consultations in the last 14 days." rows={data.recent} />
               </div>
               <p className="border-t border-edge px-4 py-2 text-[11px] text-muted">
-                Synced {data.lastRunAt ? new Date(data.lastRunAt).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "not yet"} · read-only: statuses aren&apos;t changed automatically
+                Synced {data.lastRunAt ? new Date(data.lastRunAt).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "not yet"} · statuses only change when an owner applies the suggested updates
               </p>
             </>
           )}
@@ -166,6 +172,62 @@ function Placeholder() {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Preview of forward-only status moves from bookings; an owner applies them in one go. */
+function StatusPlan({ plan, onDone }: { plan: NonNullable<ConsultPanelData["statusPlan"]>; onDone: (m: { ok: boolean; text: string }) => void }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const n = plan.length;
+  const count = (to: string) => plan.filter((c) => c.to === to).length;
+  const held = count("consult_held"), scheduled = count("consult_scheduled");
+  return (
+    <div className="border-b border-edge bg-card-2 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm">
+          <strong className="font-medium">{n} lead{n === 1 ? "" : "s"}</strong> can move forward from their bookings
+          <span className="text-muted">
+            {" "}({[held && `${held} to Consult held`, scheduled && `${scheduled} to Consult scheduled`].filter(Boolean).join(", ")})
+          </span>
+        </p>
+        <button
+          type="button"
+          className="btn-primary btn-sm"
+          disabled={pending}
+          onClick={() => {
+            if (!confirm(`Update ${n} lead status${n === 1 ? "" : "es"} from Setmore bookings?`)) return;
+            start(async () => {
+              const r = await applyConsultStatusesAction();
+              onDone(r.ok ? { ok: true, text: r.message ?? "Done" } : { ok: false, text: r.error });
+              router.refresh();
+            });
+          }}
+        >
+          {pending ? "Updating…" : `Apply ${n} update${n === 1 ? "" : "s"}`}
+        </button>
+      </div>
+      <details className="mt-1.5">
+        <summary className="cursor-pointer text-xs text-muted hover:text-ink">Review the list</summary>
+        <div className="mt-2 max-h-72 overflow-auto rounded-[var(--radius-control)] border border-edge bg-card">
+          <table className="w-full min-w-[480px] text-sm">
+            <thead className="sticky top-0 bg-card-2">
+              <tr><th className="th">Lead</th><th className="th">Booking</th><th className="th">Change</th></tr>
+            </thead>
+            <tbody className="divide-y divide-edge">
+              {plan.map((c) => (
+                <tr key={c.leadId}>
+                  <td className="td"><Link href={`/leads/${c.leadId}`} className="hover:underline"><span className="tabular text-muted">{c.recordId}</span> {c.name}</Link></td>
+                  <td className="td tabular text-muted">{day(c.bookingAt)}, {time(c.bookingAt)}</td>
+                  <td className="td">{STATUS_LABELS[c.from as Status] ?? c.from} → <strong className="font-medium">{STATUS_LABELS[c.to as Status] ?? c.to}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">Forward only: a past booking means Consult held, one still ahead means Consult scheduled. Won, lost, unqualified and on-hold leads are left alone, and cancelled bookings don&apos;t count.</p>
+      </details>
     </div>
   );
 }

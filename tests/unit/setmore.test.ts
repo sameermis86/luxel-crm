@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bookingToRow, matchLead, pickValue } from "@/lib/setmore";
+import { bookingToRow, matchLead, pickValue, plannedConsultStatus } from "@/lib/setmore";
 
 const cust = { id: "c1", first_name: "Sofia", last_name: "Rossi", email_addresses: [{ value: "old@x.com", deleted: true }, { value: "Sofia.Rossi@Gmail.com", primary: true }], phone_numbers: [{ value: "905-555-0123" }] };
 
@@ -27,5 +27,29 @@ describe("setmore mapping", () => {
     expect(matchLead({ emailNormalized: "sofiarossi@gmail.com", phoneE164: "+19055550123" }, leads)).toBe("L1");
     expect(matchLead({ emailNormalized: "x@y.com", phoneE164: "+19055550123" }, leads)).toBe("L2");
     expect(matchLead({ emailNormalized: null, phoneE164: null }, leads)).toBeNull();
+  });
+});
+
+describe("plannedConsultStatus (forward only)", () => {
+  const now = new Date("2026-11-24T15:00:00Z");
+  const past = { startsAt: new Date("2026-11-20T15:00:00Z"), endsAt: new Date("2026-11-20T16:00:00Z"), status: "confirmed" };
+  const ahead = { startsAt: new Date("2026-12-01T15:00:00Z"), endsAt: null, status: "confirmed" };
+  const cxl = { ...past, status: "cancelled" };
+  it("a booking ahead moves new/contacted/not reachable to Consult scheduled", () => {
+    for (const s of ["new", "contacted", "not_reachable"] as const) expect(plannedConsultStatus(s, [ahead], now)?.to).toBe("consult_scheduled");
+    expect(plannedConsultStatus("consult_scheduled", [ahead], now)).toBeNull();
+  });
+  it("a booking that has ended moves to Consult held, even with another one ahead", () => {
+    expect(plannedConsultStatus("new", [past], now)?.to).toBe("consult_held");
+    expect(plannedConsultStatus("consult_scheduled", [past, ahead], now)).toMatchObject({ to: "consult_held", startsAt: past.startsAt });
+  });
+  it("a meeting in progress isn't held yet", () => {
+    const now2 = new Date("2026-11-20T15:30:00Z");
+    expect(plannedConsultStatus("new", [past], now2)?.to).toBe("consult_scheduled");
+  });
+  it("never moves backwards, never touches decided leads, ignores cancelled bookings", () => {
+    for (const s of ["consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold"] as const) expect(plannedConsultStatus(s, [past, ahead], now)).toBeNull();
+    expect(plannedConsultStatus("new", [cxl], now)).toBeNull();
+    expect(plannedConsultStatus("new", [], now)).toBeNull();
   });
 });

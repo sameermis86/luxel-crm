@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { withCtx, closeDb } from "@/db/client";
 import { appointments, leads } from "@/db/schema";
 import { createLead } from "@/server/leads/service";
-import { runSetmoreSync, getSetmoreState, setmoreRestClient, type SetmoreClient } from "@/server/integrations/setmore";
+import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, type SetmoreClient } from "@/server/integrations/setmore";
+import { leadEvents } from "@/db/schema";
 import { listLeads } from "@/server/leads/queries";
 import { getSettings } from "@/server/settings";
 import { leadsHref, parseLeadFilter, parseListParams } from "@/lib/lead-filters";
@@ -71,6 +72,22 @@ describe("Setmore sync", () => {
     expect(total).toBe(1);
     expect(rows[0].id).toBe(rossi);
     expect(rows[0].nextConsultAt).toBeTruthy();
+  });
+
+  it("previews forward-only moves from bookings, and applies them through updateLead", async () => {
+    // link the past booking to a second lead that is already further along: it must be left alone
+    const ahead = (await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Ahead", lastName: "Lead", email: "ahead@example.com", status: "proposal_sent" }))).id;
+    await withCtx(env.sys, (tx) => tx.update(appointments).set({ leadId: ahead }).where(eq(appointments.externalId, "b-past")));
+    const plan = await withCtx(env.sys, (tx) => planConsultStatuses(tx, NOW));
+    expect(plan.map((c) => [c.leadId === rossi, c.from, c.to])).toEqual([[true, "new", "consult_scheduled"]]);
+
+    const r = await applyConsultStatuses(env.sys, NOW);
+    expect(r).toMatchObject({ planned: 1, applied: 1, errors: [] });
+    const [l] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.id, rossi)));
+    expect(l.status).toBe("consult_scheduled");
+    const evs = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(eq(leadEvents.leadId, rossi)));
+    expect(evs.some((e) => e.field === "status" && (e.payload as { via?: string })?.via === "setmore")).toBe(true);
+    expect(await withCtx(env.sys, (tx) => planConsultStatuses(tx, NOW))).toEqual([]); // nothing left to do
   });
 
   it("records a failure (e.g. bad token) without throwing away the last good numbers", async () => {
