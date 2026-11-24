@@ -6,19 +6,9 @@ import type { LostReason, Status } from "@/db/schema";
 import { LOST_REASONS } from "@/db/schema";
 import { STATUS_LABELS, LOST_REASON_LABELS, TRANSITIONS } from "@/lib/status";
 import { changeStatusInlineAction } from "./actions";
+import { STATUS_TONE } from "@/components/badges";
 
-const TONE: Record<Status, string> = {
-  new: "border-bloom/30 bg-bloom-soft text-bloom",
-  contacted: "border-edge bg-paper text-ink",
-  consult_scheduled: "border-stem/30 bg-stem-soft text-stem",
-  consult_held: "border-stem/40 bg-stem-soft text-stem",
-  proposal_sent: "border-amber/30 bg-amber-soft text-amber",
-  won: "border-stem bg-stem text-white",
-  lost: "border-edge bg-paper text-muted",
-  unqualified: "border-edge bg-paper text-muted",
-  not_reachable: "border-dashed border-edge bg-card text-muted",
-  on_hold: "border-edge bg-paper text-muted",
-};
+const TONE = Object.fromEntries(Object.entries(STATUS_TONE).map(([k, v]) => [k, v.pill])) as Record<Status, string>;
 
 /** Status pill that is also a dropdown: change a lead's status without opening it. */
 export function StatusCell({ leadId, recordId, status: initial, readOnly }: { leadId: string; recordId: string; status: Status; readOnly?: boolean }) {

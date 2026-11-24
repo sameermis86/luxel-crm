@@ -1,27 +1,95 @@
 @import "tailwindcss";
+@import "@fontsource-variable/fraunces";
 
+/*
+ * Luxel design system — "the atelier".
+ * Brand palette (ink, bloom, stem, sage, paper) refined into surface, text and state tokens.
+ * Every component below reads from these tokens; pages never hard-code colours.
+ */
 @theme {
-  --color-ink: #1b2420;
+  /* brand */
+  --color-ink: #17201c;
+  --color-ink-soft: #2a3530;
   --color-bloom: #bc5468;
-  --color-bloom-soft: #f6e3e7;
+  --color-bloom-strong: #a3445a;
+  --color-bloom-soft: #f7e6ea;
   --color-stem: #5f8568;
-  --color-stem-soft: #e4ede6;
+  --color-stem-strong: #456a50;
+  --color-stem-soft: #e6efe8;
   --color-sage: #8aa890;
-  --color-paper: #f4f2ec;
+  --color-amber: #9c6a1e;
+  --color-amber-soft: #f6eddb;
+
+  /* surfaces */
+  --color-paper: #f5f3ee; /* canvas */
+  --color-paper-2: #ece9e2; /* sunken / hover on canvas */
   --color-card: #ffffff;
-  --color-edge: #dcd6cb;
-  --color-muted: #7b786f;
-  --color-amber: #b07a2a;
-  --color-amber-soft: #f6ecd9;
-  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-card-2: #faf9f6; /* raised-subtle: table headers, insets */
+  --color-edge: #e5e0d6;
+  --color-edge-strong: #d3ccbf;
+
+  /* text */
+  --color-muted: #646158; /* secondary text: 5.6:1 on paper */
+  --color-faint: #8f8b81; /* placeholders, decorative only */
+
+  /* type */
+  --font-display: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* elevation */
+  --shadow-xs: 0 1px 2px rgb(23 32 28 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(23 32 28 / 0.07), 0 1px 2px rgb(23 32 28 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(23 32 28 / 0.1), 0 2px 4px -2px rgb(23 32 28 / 0.05);
+  --shadow-lg: 0 16px 40px -12px rgb(23 32 28 / 0.22), 0 4px 10px -4px rgb(23 32 28 / 0.08);
+
+  /* radius */
+  --radius-control: 8px;
+  --radius-card: 12px;
+
+  /* motion */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html { background: var(--color-paper); color: var(--color-ink); }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
-h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; }
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  font-weight: 440;
+  font-optical-sizing: auto;
+  letter-spacing: -0.018em;
+  line-height: 1.15;
+}
+::selection { background: color-mix(in srgb, var(--color-bloom) 22%, transparent); }
 
-:focus-visible { outline: 2px solid var(--color-bloom); outline-offset: 2px; border-radius: 4px; }
+:focus-visible {
+  outline: 2px solid var(--color-bloom);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-ink); }
+
+/* native select: our own chevron */
+select.input {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23646158' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 6.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+}
+textarea.input { height: auto; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   html *, html *::before, html *::after { transition: none !important; animation: none !important; }
@@ -29,39 +97,66 @@ h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 400; 
 
 .tabular { font-variant-numeric: tabular-nums; }
 
+/* ---------- buttons ---------- */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-edge bg-card px-3 py-1.5 text-sm text-ink transition-colors duration-150 hover:border-ink/40 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-edge-strong bg-card px-3.5 text-sm font-medium whitespace-nowrap text-ink shadow-xs transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[var(--ease-out-soft)] select-none hover:border-ink/25 hover:bg-card-2 active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn border-ink bg-ink text-paper hover:bg-ink/85;
+  @apply btn border-ink bg-ink text-white shadow-sm hover:border-ink-soft hover:bg-ink-soft;
 }
 @utility btn-bloom {
-  @apply btn border-bloom bg-bloom text-white hover:bg-bloom/90;
+  @apply btn border-bloom bg-bloom text-white shadow-sm hover:border-bloom-strong hover:bg-bloom-strong;
 }
 @utility btn-ghost {
-  @apply btn border-transparent bg-transparent hover:bg-ink/5;
+  @apply btn border-transparent bg-transparent shadow-none hover:border-transparent hover:bg-ink/[0.05];
 }
+@utility btn-danger {
+  @apply btn text-bloom-strong hover:border-bloom/40 hover:bg-bloom-soft;
+}
+@utility btn-sm {
+  @apply h-7 gap-1 rounded-md px-2.5 text-xs;
+}
+
+/* ---------- forms ---------- */
 @utility input {
-  @apply w-full rounded-md border border-edge bg-card px-2.5 py-1.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink/50 focus:outline-none;
+  @apply h-9 w-full rounded-[var(--radius-control)] border border-edge-strong bg-card px-3 text-sm text-ink shadow-xs transition-[border-color,box-shadow] duration-150 placeholder:text-faint hover:border-ink/25 focus:border-ink/40 focus:shadow-[0_0_0_3px_rgb(188_84_104/0.14)] focus:outline-none disabled:bg-card-2 disabled:text-muted;
 }
 @utility label {
-  @apply mb-1 block text-xs font-medium tracking-wide text-muted uppercase;
+  @apply mb-1.5 block text-[13px] font-medium text-ink/80;
 }
+@utility hint {
+  @apply mt-1 text-xs text-muted;
+}
+
+/* ---------- surfaces ---------- */
 @utility card {
-  @apply rounded-lg border border-edge bg-card;
+  @apply rounded-[var(--radius-card)] border border-edge bg-card shadow-xs;
 }
+@utility eyebrow {
+  @apply text-[11px] font-medium tracking-[0.08em] text-muted uppercase;
+}
+
+/* ---------- data ---------- */
 @utility chip {
-  @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+  @apply inline-flex h-[22px] items-center gap-1 rounded-full border px-2 text-xs font-medium whitespace-nowrap;
 }
 @utility th {
-  @apply px-3 py-2 text-left text-[11px] font-semibold tracking-wide text-muted uppercase;
+  @apply px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.06em] whitespace-nowrap text-muted uppercase;
 }
 @utility td {
-  @apply px-3 py-2 text-sm;
+  @apply px-4 py-3 text-sm;
+}
+
+/* ---------- navigation ---------- */
+@utility seg {
+  @apply inline-flex items-center gap-0.5 rounded-[10px] border border-edge bg-paper-2/70 p-0.5 text-sm;
+}
+@utility seg-item {
+  @apply rounded-[8px] px-3 py-1 font-medium whitespace-nowrap text-muted transition-colors duration-150 hover:text-ink aria-[current=page]:bg-card aria-[current=page]:text-ink aria-[current=page]:shadow-sm;
 }
 
 @media print {
   html, body { background: #fff; }
   main { padding: 0 !important; max-width: none !important; }
-  .card { border-color: #bbb; break-inside: avoid; }
+  .card { border-color: #bbb; box-shadow: none; break-inside: avoid; }
 }

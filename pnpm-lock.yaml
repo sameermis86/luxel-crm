@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@fontsource-variable/fraunces':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@supabase/ssr':
         specifier: ^0.12.7
         version: 0.12.7(@supabase/supabase-js@2.119.2(@opentelemetry/api@1.10.0))
@@ -23,12 +26,18 @@ importers:
       drizzle-orm:
         specifier: 0.45.4
         version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.15.6)(postgres@4.1.1)
+      geist:
+        specifier: ^1.9.2
+        version: 1.9.2(next@15.5.29(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(react-dom@19.1.10(react@19.1.10))(react@19.1.10))
       inngest:
         specifier: ^3.54.2
         version: 3.54.2(@opentelemetry/core@3.1.1(@opentelemetry/api@1.10.0))(next@15.5.29(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(react-dom@19.1.10(react@19.1.10))(react@19.1.10))(typescript@5.9.3)(zod@3.25.76)
       libphonenumber-js:
         specifier: ^1.13.17
         version: 1.13.17
+      lucide-react:
+        specifier: ^1.78.0
+        version: 1.78.0(@types/react@19.3.0)(react@19.1.10)
       next:
         specifier: 15.5.29
         version: 15.5.29(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
@@ -566,6 +575,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource-variable/fraunces@5.3.0':
+    resolution: {integrity: sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==}
 
   '@grpc/grpc-js@1.14.7':
     resolution: {integrity: sha512-W4W/fcBMGRVtG6dW2c7cw2mnpS3hvbBd+oQXjh2iYFTZDk1JJmcNqkM5KSaPubQpamlUUurrlb7G1s9NJeERmQ==}
@@ -2119,6 +2131,11 @@ packages:
     resolution: {integrity: sha512-iJ9KMsiu+xKtNRX0PmGLSaIU3bUBAyzWTyqKemKPzNPsmmsBCQYmlNg+brEbES7IHSXtdVwzBPzx1vz3FAaipw==}
     engines: {node: '>=18'}
 
+  geist@1.9.2:
+    resolution: {integrity: sha512-UU1x2q5Khob0+i4csFvXk1Ki4DePdu7xISuXyEcj1tzQMg64oN7Kbuy4e5z5QhcUWbbvOMJNs3ZxYQqpsEMV3w==}
+    peerDependencies:
+      next: '>=13.2.0'
+
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
@@ -2316,6 +2333,15 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lucide-react@1.78.0:
+    resolution: {integrity: sha512-61NFdT5ZfAY8xs3LWKkB78GVeuiCcjYFEXeHWxWP+mQhP+UWLGsA9hJZQPtIyXRDhOvT8kgmWwAIyH5L7RIhAA==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   magic-string@1.4.5:
     resolution: {integrity: sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==}
@@ -3097,6 +3123,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@fontsource-variable/fraunces@5.3.0': {}
 
   '@grpc/grpc-js@1.14.7':
     dependencies:
@@ -4657,6 +4685,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  geist@1.9.2(next@15.5.29(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)):
+    dependencies:
+      next: 15.5.29(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+
   get-caller-file@2.0.5: {}
 
   get-tsconfig@4.14.3:
@@ -4829,6 +4861,12 @@ snapshots:
   long@5.3.2: {}
 
   lru-cache@10.4.3: {}
+
+  lucide-react@1.78.0(@types/react@19.3.0)(react@19.1.10):
+    dependencies:
+      react: 19.1.10
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   magic-string@1.4.5:
     dependencies:
