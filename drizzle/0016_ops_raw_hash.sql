@@ -1,0 +1,1 @@
+ALTER TABLE "ops_events" ADD COLUMN "raw_hash" text;

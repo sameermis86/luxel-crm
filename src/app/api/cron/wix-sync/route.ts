@@ -39,11 +39,16 @@ async function handle(req: NextRequest) {
     }
   }
 
+  const started = Date.now();
+  // ?only=ops: just the Fulfillment & Ops sync (e.g. to finish a large first run)
+  const only = req.nextUrl.searchParams.get("only");
   const out: Record<string, unknown> = { ok: true };
   let failed = false;
   const apiKey = process.env.WIX_API_KEY;
   const siteId = process.env.WIX_SITE_ID;
-  if (apiKey && siteId) {
+  if (only === "ops") {
+    // lead syncs skipped
+  } else if (apiKey && siteId) {
     try {
       out.wix = await runWixSync(orgId, wixRestClient(apiKey, siteId));
     } catch (e) {
@@ -53,7 +58,7 @@ async function handle(req: NextRequest) {
     }
   } else out.wix = { skipped: "WIX_API_KEY / WIX_SITE_ID not configured" };
 
-  if (Object.keys(configuredCalendars()).length) {
+  if (only !== "ops" && Object.keys(configuredCalendars()).length) {
     try {
       // ?goodshuffle=apply-exact: one-off apply of phone/email matches only
       const gsParam = req.nextUrl.searchParams.get("goodshuffle");
@@ -72,14 +77,15 @@ async function handle(req: NextRequest) {
   // Fulfillment & Ops: signed Goodshuffle contracts → event board (pull sheets, setup, teardown)
   if (configuredCalendars().signed || configuredCalendars().action_needed) {
     try {
-      out.ops = await runOpsSync(orgId);
+      // whatever is left of the 60s limit (each event commits on its own; the next run continues)
+      out.ops = await runOpsSync(orgId, { budgetMs: Math.max(5_000, 48_000 - (Date.now() - started)) });
     } catch (e) {
       console.error("[cron] ops sync failed", e);
       out.ops = { error: (e as Error).message };
       failed = true;
     }
   }
-  if (setmoreConfigured()) {
+  if (only !== "ops" && setmoreConfigured()) {
     try {
       out.setmore = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
     } catch (e) {

@@ -423,6 +423,8 @@ export const opsEvents = pgTable(
     notesInternal: text("notes_internal"),
     notesClient: text("notes_client"),
     links: jsonb("links").notNull().default({}),
+    /** fingerprint of the calendar entry last applied (unchanged entries are skipped) */
+    rawHash: text("raw_hash"),
     /** no longer in Goodshuffle's signed calendars (cancelled or moved back) */
     goneAt: ts("gone_at"),
     syncedAt: ts("synced_at").notNull().defaultNow(),

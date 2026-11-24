@@ -13,7 +13,12 @@ import { getSettings } from "@/server/settings";
  * tasks are generated per decor area. Re-running updates quantities and adds new lines,
  * and never touches what the team ticked off or added themselves.
  */
-export async function runOpsSync(orgId: string, opts: { calendars?: ReturnType<typeof configuredCalendars>; fetcher?: IcsFetcher; now?: Date } = {}) {
+export async function runOpsSync(
+  orgId: string,
+  opts: { calendars?: ReturnType<typeof configuredCalendars>; fetcher?: IcsFetcher; now?: Date; budgetMs?: number } = {},
+) {
+  const startedAt = Date.now();
+  const budgetMs = opts.budgetMs ?? 40_000; // stay inside the serverless time limit; the next run continues
   const now = opts.now ?? new Date();
   const calendars = opts.calendars ?? configuredCalendars();
   const fetcher = opts.fetcher ?? defaultFetcher;
@@ -34,20 +39,35 @@ export async function runOpsSync(orgId: string, opts: { calendars?: ReturnType<t
     }
   }
 
-  let created = 0, updated = 0, itemsAdded = 0, tasksAdded = 0;
+  let created = 0, updated = 0, itemsAdded = 0, tasksAdded = 0, unchanged = 0;
+  let partial = false;
   const seen: string[] = [];
-  await withCtx(ctx, async (tx) => {
-    const leadByProject = new Map(
+  const leadByProject = await withCtx(ctx, async (tx) => new Map(
       (await tx.select({ id: leads.id, project: leads.goodshuffleProject }).from(leads).where(and(isNull(leads.duplicateOfId), inArray(leads.goodshuffleProject, [...projects.keys()].length ? [...projects.keys()] : ["-"]))))
         .map((l) => [l.project!, l.id]),
-    );
-    for (const [key, { ev, status }] of projects) {
+  ));
+  // entries we already stored unchanged are skipped (cheap re-runs); each event commits on its own
+  const known = new Map(
+    (await withCtx(ctx, (tx) => tx.select({ project: opsEvents.project, raw: opsEvents.rawHash }).from(opsEvents).where(eq(opsEvents.orgId, orgId)))).map((e) => [e.project, e]),
+  );
+  for (const [key, { ev, status }] of projects) {
+    seen.push(key);
+    const hash = simpleHash(`${status}|${ev.startDate}|${ev.summary}|${ev.description}|${leadByProject.get(key) ?? ""}`);
+    const prev = known.get(key);
+    if (prev && prev.raw === hash) {
+      unchanged++;
+      continue;
+    }
+    if (Date.now() - startedAt > budgetMs) {
+      partial = true;
+      break;
+    }
+    await withCtx(ctx, async (tx) => {
       const p = parseProject(ev);
-      seen.push(key);
       const values = {
         orgId, project: key, gsUid: ev.uid, gsStatus: status, leadId: leadByProject.get(key) ?? null,
         name: p.name, client: p.client, venue: p.venue, eventDate: ev.startDate!, timeText: p.timeText, salesLead: p.salesLead,
-        notesInternal: p.notesInternal, notesClient: p.notesClient, links: p.links, goneAt: null, syncedAt: now,
+        notesInternal: p.notesInternal, notesClient: p.notesClient, links: p.links, goneAt: null, syncedAt: now, rawHash: hash,
       };
       const [existing] = await tx.select({ id: opsEvents.id }).from(opsEvents).where(and(eq(opsEvents.orgId, orgId), eq(opsEvents.project, key)));
       let eventId: string;
@@ -88,11 +108,20 @@ export async function runOpsSync(orgId: string, opts: { calendars?: ReturnType<t
           .returning({ id: opsTasks.id });
         tasksAdded += inserted.length;
       }
-    }
+    });
+  }
 
-    // upcoming events that left the signed calendars (cancelled / back to quote)
+  // upcoming events that left the signed calendars (cancelled / back to quote); only judged after a complete pass
+  if (!partial) await withCtx(ctx, async (tx) => {
     const live = await tx.select({ id: opsEvents.id, project: opsEvents.project }).from(opsEvents).where(and(eq(opsEvents.orgId, orgId), gte(opsEvents.eventDate, dateInTz(now)), isNull(opsEvents.goneAt)));
     for (const e of live) if (!seen.includes(e.project)) await tx.update(opsEvents).set({ goneAt: now }).where(eq(opsEvents.id, e.id));
   });
-  return { projects: projects.size, created, updated, itemsAdded, tasksAdded };
+  return { projects: projects.size, created, updated, unchanged, itemsAdded, tasksAdded, partial };
+}
+
+/** Short, stable fingerprint of a calendar entry (FNV-1a). */
+function simpleHash(s: string) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
 }

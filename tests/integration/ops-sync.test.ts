@@ -62,3 +62,16 @@ describe("Ops sync", () => {
     expect(rows[0].items).toBe(3); // Head table, Lobby, Taper candles (Guest Tables removed; logistics excluded)
   });
 });
+
+describe("Ops sync time budget", () => {
+  it("stops when out of time without flagging anything as gone, and the next run finishes", async () => {
+    const env2 = await freshOrg();
+    feed = ["BEGIN:VCALENDAR", vevent("e1", "2027-11-06", SAMPLE), vevent("e2", "2027-11-20", SAMPLE.replace("(231716065)", "(231716066)")), "END:VCALENDAR"].join("\r\n");
+    const first = await runOpsSync(env2.orgId, { calendars, fetcher, now: NOW, budgetMs: -1 });
+    expect(first).toMatchObject({ created: 0, partial: true });
+    const second = await runOpsSync(env2.orgId, { calendars, fetcher, now: NOW });
+    expect(second).toMatchObject({ created: 2, partial: false });
+    const third = await runOpsSync(env2.orgId, { calendars, fetcher, now: NOW });
+    expect(third).toMatchObject({ unchanged: 2, updated: 0 });
+  });
+});
