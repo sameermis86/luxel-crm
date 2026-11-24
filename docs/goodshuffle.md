@@ -43,5 +43,5 @@ leaks, use "Reset" next to it in Google Calendar and update Vercel.
   source/channel Goodshuffle, client name, phone/email from the event, venue, event date, CRM status from the stage.
   Later runs find it again by project number. Ambiguous projects ("more than one lead could match") stay in the review list.
 - Lead creation is off until switched on (`goodshuffle_settings.createLeads`); `POST /api/cron/wix-sync?goodshuffle=create-leads`
-  switches it on and runs once. The lead's created date is the calendar entry's CREATED stamp when the feed has one.
+  switches it on and runs once. Only projects whose event is after today become leads, dated the day they were created (the feed has no real creation date: every entry is stamped when the calendar sync was connected).
 

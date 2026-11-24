@@ -154,7 +154,8 @@ export async function runGoodshuffleSync(
   if (!statuses.length) return { mode, calendars: [], lastError: "No Goodshuffle calendars configured" };
 
   const ctx = systemCtx(orgId);
-  const since = addDaysToDate(dateInTz(now), -365);
+  const today = dateInTz(now);
+  const since = addDaysToDate(today, -365);
 
   // live leads with what matching needs
   const pool = await withCtx(ctx, (tx) =>
@@ -198,7 +199,8 @@ export async function runGoodshuffleSync(
       events++;
       const m = matchEvent(ev, pool);
       if (!m.leadId) {
-        if (createLeads && CREATABLE.has(m.reason) && (clientName(ev) || ev.summary)) {
+        // only upcoming events become leads; past projects stay out of the CRM
+        if (createLeads && CREATABLE.has(m.reason) && ev.startDate && ev.startDate > today && (clientName(ev) || ev.summary)) {
           const key = projectNumber(ev) ?? ev.uid;
           const prev = toCreate.get(key);
           if (!prev || TAG_RANK[status] > TAG_RANK[prev.status]) toCreate.set(key, { ev, status });
@@ -251,7 +253,7 @@ export async function runGoodshuffleSync(
             explicitSource: "goodshuffle",
             explicitChannel: "goodshuffle",
           },
-          { mode: "import", submissionId: `goodshuffle:${key}`, onDuplicate: "merge_blanks", autoAssign: false, autoFollowUp: false, createdAt: ev.created ?? undefined, now, rawPayload: { goodshuffleStatus: GS_LABELS[status], eventUid: ev.uid, project: projectNumber(ev) } },
+          { mode: "import", submissionId: `goodshuffle:${key}`, onDuplicate: "merge_blanks", autoAssign: false, autoFollowUp: false, now, rawPayload: { goodshuffleStatus: GS_LABELS[status], eventUid: ev.uid, project: projectNumber(ev) } },
         ),
       );
       if (r.lead) {

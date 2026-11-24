@@ -13,7 +13,7 @@ const ev = (uid: string, date: string, summary: string, description = "") =>
 const cal = (...evs: string[]) => ["BEGIN:VCALENDAR", ...evs, "END:VCALENDAR"].join("\r\n");
 const feeds: Record<string, string> = {
   "https://cal/quote": cal(ev("q1", "2027-06-12", "Rossi Wedding"), ev("q2", "2027-08-01", "Park Wedding", "Status: Quote Sent\\nProject: Park Wedding (123456789)\\nVenue: Kortright Centre\\nClient: Mina Park\\nPhone #: (416) 555-0177")),
-  "https://cal/signed": cal(ev("s1", "2027-09-18", "Nguyen Wedding"), ev("s2", "2027-06-12", "Rossi Wedding")),
+  "https://cal/signed": cal(ev("s1", "2027-09-18", "Nguyen Wedding"), ev("s2", "2027-06-12", "Rossi Wedding"), ev("s3", "2026-09-05", "Old Wedding", "Project: Old Wedding (555000111)\\nClient: Past Client")),
 };
 const calendars = { quote_sent: "https://cal/quote", signed: "https://cal/signed" } as const;
 const fetcher = async (u: string) => feeds[u];
@@ -30,7 +30,7 @@ describe("Goodshuffle sync", () => {
   it("lead creation is off until switched on", async () => {
     const s = await runGoodshuffleSync(env.orgId, { calendars, fetcher, now: NOW });
     expect(s.created).toBe(0);
-    expect(s.unmatched!.map((u) => u.uid)).toEqual(["q2"]);
+    expect(s.unmatched!.map((u) => u.uid).sort()).toEqual(["q2", "s3"]);
   });
 
   it("preview (default) records proposed changes and unmatched projects without touching leads", async () => {
@@ -40,7 +40,8 @@ describe("Goodshuffle sync", () => {
     // Rossi is in both calendars: the furthest status (Signed) wins
     expect(s.changes!.map((c) => [c.leadId, c.to, c.applied]).sort()).toEqual([[nguyen, "won", false], [rossi, "won", false]].sort());
     // a Goodshuffle project with no lead becomes one (source Goodshuffle), at its stage, even in preview
-    expect(s.unmatched).toEqual([]);
+    // …but only for upcoming events: the past project stays in the review list
+    expect(s.unmatched!.map((u) => u.uid)).toEqual(["s3"]);
     expect(s.created).toBe(1);
     const [park] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.goodshuffleProject, "123456789")));
     expect(park).toMatchObject({ firstName: "Mina", lastName: "Park", source: "goodshuffle", captureChannel: "goodshuffle", status: "proposal_sent", goodshuffleStatus: "quote_sent", venueName: "Kortright Centre", phoneE164: "+14165550177", eventDate: "2027-08-01" });
