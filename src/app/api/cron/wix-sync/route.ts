@@ -46,7 +46,10 @@ async function handle(req: NextRequest) {
 
   if (Object.keys(configuredCalendars()).length) {
     try {
-      const g = await runGoodshuffleSync(orgId);
+      // ?goodshuffle=apply-exact: one-off apply of phone/email matches only
+      const g = req.nextUrl.searchParams.get("goodshuffle") === "apply-exact"
+        ? await runGoodshuffleSync(orgId, { mode: "apply", onlyExact: true })
+        : await runGoodshuffleSync(orgId);
       out.goodshuffle = { mode: g.mode, events: g.events, changes: g.changes?.length ?? 0, applied: g.changes?.filter((c) => c.applied).length ?? 0, unmatched: g.unmatched?.length ?? 0 };
     } catch (e) {
       console.error("[cron] goodshuffle sync failed", e);

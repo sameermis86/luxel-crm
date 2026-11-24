@@ -124,7 +124,7 @@ async function saveGsState(orgId: string, value: GsState) {
 
 export async function runGoodshuffleSync(
   orgId: string,
-  opts: { mode?: "preview" | "apply"; calendars?: Partial<Record<GsStatus, string>>; fetcher?: IcsFetcher; now?: Date } = {},
+  opts: { mode?: "preview" | "apply"; onlyExact?: boolean; calendars?: Partial<Record<GsStatus, string>>; fetcher?: IcsFetcher; now?: Date } = {},
 ): Promise<GsState> {
   const now = opts.now ?? new Date();
   const mode = opts.mode ?? ((await getGsSettings(orgId)).autoApply ? "apply" : "preview");
@@ -192,6 +192,8 @@ export async function runGoodshuffleSync(
 
   if (mode === "apply") {
     for (const c of changes) {
+      // onlyExact: apply phone/email matches; leave name-and-date matches for review
+      if (opts.onlyExact && c.how !== "Same email or phone") continue;
       try {
         await withCtx(ctx, (tx) =>
           updateLead(

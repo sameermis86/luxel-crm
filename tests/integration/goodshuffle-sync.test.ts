@@ -37,6 +37,11 @@ describe("Goodshuffle sync", () => {
     expect((await getGsState(env.orgId)).changes!.length).toBe(2);
   });
 
+  it("onlyExact applies phone/email matches and leaves name matches pending", async () => {
+    const s = await runGoodshuffleSync(env.orgId, { mode: "apply", onlyExact: true, calendars, fetcher, now: NOW });
+    expect(s.changes!.every((c) => !c.applied)).toBe(true); // both test matches are date + name
+  });
+
   it("apply moves leads forward through the audited path, tagged via goodshuffle", async () => {
     await setGsAutoApply(env.orgId, true);
     const s = await runGoodshuffleSync(env.orgId, { calendars, fetcher, now: NOW });

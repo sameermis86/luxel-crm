@@ -58,6 +58,19 @@ export function GoodshufflePanel({ data, isOwner }: { data: GsPanelData; isOwner
                 Apply {pendingChanges.length} change{pendingChanges.length === 1 ? "" : "s"}
               </button>
             )}
+            {isOwner && pendingChanges.some((c) => c.how === "Same email or phone") && pendingChanges.some((c) => c.how !== "Same email or phone") && (
+              <button
+                className="btn"
+                disabled={pending}
+                onClick={() => {
+                  const n = pendingChanges.filter((c) => c.how === "Same email or phone").length;
+                  if (!confirm(`Update ${n} lead(s) matched by phone or email? Name-and-date matches stay for review.`)) return;
+                  run(() => goodshuffleRunAction("apply", true), (d) => `Applied ${d.applied} phone/email match(es)`);
+                }}
+              >
+                Apply phone/email matches only
+              </button>
+            )}
           </div>
         )}
       </div>
