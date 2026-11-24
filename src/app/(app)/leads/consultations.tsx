@@ -69,7 +69,7 @@ export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
                 <List title="Met in the last 14 days" empty="No consultations in the last 14 days." rows={data.recent} />
               </div>
               <p className="border-t border-edge px-4 py-2 text-[11px] text-muted">
-                Synced {data.lastRunAt ? new Date(data.lastRunAt).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "not yet"} · statuses only change when an owner applies the suggested updates
+                Synced {data.lastRunAt ? new Date(data.lastRunAt).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "not yet"} · bookings move lead statuses forward automatically on each sync
               </p>
             </>
           )}
@@ -187,7 +187,7 @@ function StatusPlan({ plan, onDone }: { plan: NonNullable<ConsultPanelData["stat
     <div className="border-b border-edge bg-card-2 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
-          <strong className="font-medium">{n} lead{n === 1 ? "" : "s"}</strong> can move forward from their bookings
+          <strong className="font-medium">{n} lead{n === 1 ? "" : "s"}</strong> can move forward from their bookings, waiting for the next sync
           <span className="text-muted">
             {" "}({[held && `${held} to Consult held`, scheduled && `${scheduled} to Consult scheduled`].filter(Boolean).join(", ")})
           </span>

@@ -10,9 +10,9 @@ the next booked time, and `/leads?consult=upcoming` lists every lead with a book
   → customers. Customers already stored aren't fetched again.
 - Stores a read-only copy in `appointments` (one row per booking, upserted on the Setmore id).
 - Links each booking to a lead by exact email, then phone. The sync itself doesn't change lead statuses.
-- **Status updates (owners):** the panel previews leads whose bookings support a forward move — a booking
-  that has ended → Consult held, one still ahead → Consult scheduled — and **Apply** makes them through
-  `updateLead` (timeline: "from a Setmore booking"). Only New, Contacted, Not reachable and Consult scheduled
+- **Status updates (automatic):** every sync moves leads whose bookings support a forward move — a booking
+  that has ended → Consult held, one still ahead → Consult scheduled — through `updateLead`. Between syncs
+  owners see what's waiting in the panel and can **Apply** it straight away (timeline: "from a Setmore booking"). Only New, Contacted, Not reachable and Consult scheduled
   leads move; won, lost, unqualified and on-hold leads and cancelled bookings are ignored. Rule:
   `plannedConsultStatus` in `src/lib/setmore.ts`.
 - A booking with no matching lead shows **Add as lead**: it creates the lead (Consult scheduled if the

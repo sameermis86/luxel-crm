@@ -4,14 +4,15 @@ import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
 import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
 import { runOpsSync } from "@/server/ops/sync";
-import { runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
+import { applyConsultStatuses, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
+import { systemCtx } from "@/db/client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Scheduled Wix → CRM sync. Called by the GitHub Actions schedule (every 15 min),
- * Vercel Cron (daily backup) and Inngest (if connected). All send
+ * Scheduled sync (Wix, Goodshuffle, Ops, Setmore). Called every 15 min by Supabase pg_cron
+ * (job "luxel-sync", see docs/scheduling.md); GitHub Actions and Vercel Cron are backups. All send
  * `Authorization: Bearer $CRON_SECRET` (Vercel Cron does this automatically).
  */
 async function handle(req: NextRequest) {
@@ -87,7 +88,10 @@ async function handle(req: NextRequest) {
   }
   if (only !== "ops" && setmoreConfigured()) {
     try {
-      out.setmore = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
+      const sm = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
+      // bookings move leads forward automatically (forward-only, see plannedConsultStatus)
+      const st = await applyConsultStatuses(systemCtx(orgId));
+      out.setmore = { ...sm, statusesApplied: st.applied, statusErrors: st.errors.length };
     } catch (e) {
       console.error("[cron] setmore sync failed", e);
       out.setmore = { error: (e as Error).message };
