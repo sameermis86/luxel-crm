@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
 import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
+import { runOpsSync } from "@/server/ops/sync";
 import { runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,16 @@ async function handle(req: NextRequest) {
     } catch (e) {
       console.error("[cron] goodshuffle sync failed", e);
       out.goodshuffle = { error: (e as Error).message };
+      failed = true;
+    }
+  }
+  // Fulfillment & Ops: signed Goodshuffle contracts → event board (pull sheets, setup, teardown)
+  if (configuredCalendars().signed || configuredCalendars().action_needed) {
+    try {
+      out.ops = await runOpsSync(orgId);
+    } catch (e) {
+      console.error("[cron] ops sync failed", e);
+      out.ops = { error: (e as Error).message };
       failed = true;
     }
   }

@@ -1,0 +1,51 @@
+
+> luxel-crm@0.1.0 dev /home/user/luxel-crm
+> next dev -p 3000
+
+   ▲ Next.js 15.5.29
+   - Local:        http://localhost:3000
+   - Network:      http://192.0.2.2:3000
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ✓ Ready in 1882ms
+ ✓ Compiled /middleware in 363ms (223 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 2.3s (912 modules)
+ GET /login 200 in 3536ms
+ GET /login 200 in 59ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3.2s (1961 modules)
+ GET / 200 in 3916ms
+ POST /login 303 in 3972ms
+ GET / 200 in 351ms
+ ○ Compiling /ops ...
+ ✓ Compiled /ops in 4.5s (3158 modules)
+ GET /ops 200 in 5763ms
+ ✓ Compiled in 1089ms (3172 modules)
+ GET /login 200 in 1094ms
+ GET / 200 in 346ms
+ POST /login 303 in 395ms
+ GET /ops 200 in 264ms
+ ○ Compiling /ops/events/[id] ...
+ ✓ Compiled /ops/events/[id] in 756ms (3166 modules)
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 1630ms
+[Error: aborted] { code: 'ECONNRESET' }
+ ⨯ uncaughtException: [Error: aborted] { code: 'ECONNRESET' }
+ ⨯ uncaughtException:  [Error: aborted] { code: 'ECONNRESET' }
+ ✓ Compiled in 966ms (3180 modules)
+ GET /login 200 in 245ms
+ GET / 200 in 362ms
+ POST /login 303 in 416ms
+ GET /ops 200 in 205ms
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 226ms
+ POST /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 370ms
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 228ms
+ POST /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 129ms
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 77ms
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef?tab=teardown 200 in 189ms
+ GET /ops/events/67657632-5c7a-410e-bccb-8fe3d3848bef 200 in 241ms
+ ✓ Compiled in 240ms (626 modules)
+ ✓ Compiled in 170ms (626 modules)

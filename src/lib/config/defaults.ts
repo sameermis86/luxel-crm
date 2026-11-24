@@ -35,8 +35,18 @@ export const utmRuleSchema = z.object({
   result: z.enum(SOURCES),
 });
 
+export const opsSchema = z.object({
+  /** setup steps added for every decor area of an event ("{area}" is replaced) */
+  setupSteps: z.array(z.string()).default([]),
+  /** teardown steps added for every decor area of an event */
+  teardownSteps: z.array(z.string()).default([]),
+  /** signed events stay on the Ops board this many days after the event (for teardown and returns) */
+  keepDaysAfter: z.number().int().min(0).default(14),
+});
+
 export const settingsSchema = z.object({
   businessHours: businessHoursSchema,
+  ops: opsSchema.default({ setupSteps: [], teardownSteps: [], keepDaysAfter: 14 }),
   followUps: followUpSchema,
   utmRules: z.array(utmRuleSchema),
   referrerRules: z.array(z.object({ domain: z.string(), result: z.enum(SOURCES) })),
@@ -59,6 +69,11 @@ export const DEFAULT_SERVICE_AREA = [
 
 export const DEFAULT_SETTINGS: Settings = {
 
+  ops: {
+    setupSteps: ["Pull and check {area} items", "Load {area} onto the truck", "Set up {area}", "Photo of {area} when finished"],
+    teardownSteps: ["Strike {area}", "Count and pack {area} items", "Load {area} back onto the truck", "Note anything damaged or missing ({area})"],
+    keepDaysAfter: 14,
+  },
   businessHours: { timezone: "America/Toronto", days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17 },
   followUps: {
     firstResponseBusinessHours: 2,

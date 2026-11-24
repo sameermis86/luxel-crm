@@ -81,7 +81,8 @@ export type Action =
   | "imports:undo"
   | "settings:manage"
   | "rules:manage"
-  | "users:manage";
+  | "users:manage"
+  | "ops:write";
 
 const MATRIX: Record<Action, Role[]> = {
   "leads:read_all": ["owner", "manager"],
@@ -93,6 +94,7 @@ const MATRIX: Record<Action, Role[]> = {
   "settings:manage": ["owner"],
   "rules:manage": ["owner"],
   "users:manage": ["owner"],
+  "ops:write": ["owner", "manager", "staff"],
 };
 
 export function can(s: Pick<Session, "role">, action: Action) {

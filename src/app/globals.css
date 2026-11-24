@@ -59,3 +59,9 @@ h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 400; 
 @utility td {
   @apply px-3 py-2 text-sm;
 }
+
+@media print {
+  html, body { background: #fff; }
+  main { padding: 0 !important; max-width: none !important; }
+  .card { border-color: #bbb; break-inside: avoid; }
+}

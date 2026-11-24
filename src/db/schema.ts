@@ -402,6 +402,85 @@ export const appointments = pgTable(
 );
 export type Appointment = typeof appointments.$inferSelect;
 
+/* ----------------------------- Fulfillment & Ops ----------------------------- */
+
+/** A signed Goodshuffle project on the Ops board (one per project number). */
+export const opsEvents = pgTable(
+  "ops_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    project: text("project").notNull(), // Goodshuffle project number
+    gsUid: text("gs_uid"),
+    gsStatus: text("gs_status").notNull(), // signed | action_needed
+    leadId: uuid("lead_id").references(() => leads.id),
+    name: text("name").notNull(),
+    client: text("client"),
+    venue: text("venue"),
+    eventDate: date("event_date", { mode: "string" }).notNull(),
+    timeText: text("time_text"),
+    salesLead: text("sales_lead"),
+    notesInternal: text("notes_internal"),
+    notesClient: text("notes_client"),
+    links: jsonb("links").notNull().default({}),
+    /** no longer in Goodshuffle's signed calendars (cancelled or moved back) */
+    goneAt: ts("gone_at"),
+    syncedAt: ts("synced_at").notNull().defaultNow(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("ops_events_org_project").on(t.orgId, t.project), index("ops_events_org_date").on(t.orgId, t.eventDate)],
+);
+
+/** Pull sheet lines: Goodshuffle packages (fromGs) and the components the team adds under them. */
+export const opsItems = pgTable(
+  "ops_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    eventId: uuid("event_id").notNull().references(() => opsEvents.id),
+    parentId: uuid("parent_id"),
+    area: text("area").notNull(),
+    name: text("name").notNull(),
+    qty: numeric("qty", { mode: "number" }).notNull().default(1),
+    logistics: boolean("logistics").notNull().default(false),
+    fromGs: boolean("from_gs").notNull().default(false),
+    /** a Goodshuffle line that disappeared from the project */
+    removedAt: ts("removed_at"),
+    pulledAt: ts("pulled_at"),
+    pulledBy: uuid("pulled_by").references(() => users.id),
+    loadedAt: ts("loaded_at"),
+    loadedBy: uuid("loaded_by").references(() => users.id),
+    returnedAt: ts("returned_at"),
+    returnedBy: uuid("returned_by").references(() => users.id),
+    returnedQty: numeric("returned_qty", { mode: "number" }),
+    notes: text("notes"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ops_items_event").on(t.eventId)],
+);
+
+/** Setup / teardown checklist for an event (generated from the template, plus the team's own). */
+export const opsTasks = pgTable(
+  "ops_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    eventId: uuid("event_id").notNull().references(() => opsEvents.id),
+    phase: text("phase").notNull(), // setup | teardown
+    area: text("area").notNull(),
+    title: text("title").notNull(),
+    auto: boolean("auto").notNull().default(false),
+    sort: integer("sort").notNull().default(0),
+    doneAt: ts("done_at"),
+    doneBy: uuid("done_by").references(() => users.id),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ops_tasks_event").on(t.eventId), uniqueIndex("ops_tasks_auto_unique").on(t.eventId, t.phase, t.area, t.title)],
+);
+export type OpsEvent = typeof opsEvents.$inferSelect;
+export type OpsItemRow = typeof opsItems.$inferSelect;
+export type OpsTask = typeof opsTasks.$inferSelect;
+
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type LeadEvent = typeof leadEvents.$inferSelect;

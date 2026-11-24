@@ -3,7 +3,7 @@ import { requireSession, can } from "@/server/auth";
 import { withCtx } from "@/db/client";
 import { ctxFor } from "@/server/auth";
 import { unreadNotifications } from "@/server/leads/queries";
-import { NavLink } from "@/components/nav-link";
+import { DivisionSwitcher, NewLeadButton, SectionNav } from "@/components/division-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -12,21 +12,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const notes = await withCtx(ctxFor(session), (tx) => unreadNotifications(tx, session.userId));
   return (
     <div className="min-h-screen">
-      <header className="border-b border-edge bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80 sticky top-0 z-30">
+      <header className="sticky top-0 z-30 border-b border-edge bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80 print:hidden">
         <div className="mx-auto flex max-w-[1400px] items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="shrink-0">
             <span className="font-display text-xl">Luxel</span>
-            <span className="ml-1.5 text-[10px] tracking-[0.2em] text-muted uppercase">Lead desk</span>
           </Link>
-          <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Main">
-            <NavLink href="/" exact>Dashboard</NavLink>
-            <NavLink href="/leads">Leads</NavLink>
-            <NavLink href="/follow-ups">My follow-ups</NavLink>
-            {can(session, "imports:create") && <NavLink href="/imports">Import</NavLink>}
-            {can(session, "settings:manage") && <NavLink href="/settings">Settings</NavLink>}
+          <div className="hidden min-w-0 overflow-x-auto md:block">
+            <DivisionSwitcher />
+          </div>
+          <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Section">
+            <SectionNav canImport={can(session, "imports:create")} canSettings={can(session, "settings:manage")} />
           </nav>
           <div className="flex shrink-0 items-center gap-3 text-sm">
-            <Link href="/leads/new" className="btn-bloom hidden sm:inline-flex">+ New lead</Link>
+            <NewLeadButton />
             <details className="relative">
               <summary className="btn-ghost relative cursor-pointer list-none" aria-label={`${notes.length} notifications`}>
                 <span aria-hidden>🔔</span>
@@ -56,6 +54,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </button>
             </form>
           </div>
+        </div>
+        <div className="mx-auto max-w-[1400px] overflow-x-auto px-4 pb-2 md:hidden">
+          <DivisionSwitcher />
         </div>
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">{children}</main>
