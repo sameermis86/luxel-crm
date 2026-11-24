@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { withCtx, closeDb } from "@/db/client";
 import { appointments, leads } from "@/db/schema";
 import { createLead } from "@/server/leads/service";
-import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, type SetmoreClient } from "@/server/integrations/setmore";
-import { leadEvents } from "@/db/schema";
+import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, applyBookings, type SetmoreClient } from "@/server/integrations/setmore";
+import { leadEvents, followUps } from "@/db/schema";
+import { and, isNull } from "drizzle-orm";
 import { listLeads } from "@/server/leads/queries";
 import { getSettings } from "@/server/settings";
 import { leadsHref, parseLeadFilter, parseListParams } from "@/lib/lead-filters";
@@ -88,6 +89,44 @@ describe("Setmore sync", () => {
     const evs = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(eq(leadEvents.leadId, rossi)));
     expect(evs.some((e) => e.field === "status" && (e.payload as { via?: string })?.via === "setmore")).toBe(true);
     expect(await withCtx(env.sys, (tx) => planConsultStatuses(tx, NOW))).toEqual([]); // nothing left to do
+  });
+
+  it("links bookings by unique name, creates leads for new people by booking type, and moves stale follow-ups to the meeting", async () => {
+    const appt = (externalId: string, customerName: string, email: string, serviceName: string, startsAt: string, status = "confirmed") => ({
+      orgId: env.orgId, source: "setmore", externalId, customerName, email, emailNormalized: email, serviceName, startsAt: new Date(startsAt), status,
+    });
+    await withCtx(env.sys, (tx) =>
+      tx.insert(appointments).values([
+        appt("n1", "Sofia Rossi", "sofia.other@example.com", "Quote Review Call", "2026-12-03T15:00:00Z"), // same person, other email
+        appt("n2", "Grace Kim", "grace@example.com", "Review Meeting at the Luxel Studio - Existing Booking", "2026-11-18T15:00:00Z"),
+        appt("n3", "Grace Kim", "grace@example.com", "In-Person Consultation - New Booking", "2026-12-04T15:00:00Z"),
+        appt("n4", "Leo Park", "leo@example.com", "Phone Consultation - New Booking", "2026-11-19T15:00:00Z"),
+        appt("n5", "Cancelled Only", "cx@example.com", "Phone Consultation - New Booking", "2026-11-21T15:00:00Z", "cancelled"),
+      ]),
+    );
+    const r = await applyBookings(env.sys, NOW);
+    expect(r).toMatchObject({ linkedByName: 1, created: 2, errors: [] });
+
+    const rows = await withCtx(env.sys, (tx) => tx.select().from(appointments));
+    const by = (id: string) => rows.find((x) => x.externalId === id)!;
+    expect(by("n1").leadId).toBe(rossi);
+    expect(by("n2").leadId).toBeTruthy();
+    expect(by("n3").leadId).toBe(by("n2").leadId); // one lead per person
+    expect(by("n5").leadId).toBeNull();
+    const all = await withCtx(env.sys, (tx) => tx.select().from(leads));
+    const grace = all.find((l) => l.id === by("n2").leadId)!;
+    const leo = all.find((l) => l.id === by("n4").leadId)!;
+    expect(grace.status).toBe("won");
+    expect(grace.createdAt.toISOString()).toBe("2026-11-18T15:00:00.000Z"); // dated at the first booking
+    expect(leo.status).toBe("consult_held");
+    expect(all.some((l) => l.email === "cx@example.com")).toBe(false);
+
+    // Rossi has a meeting ahead and no follow-up: the meeting becomes the next follow-up
+    const fus = await withCtx(env.sys, (tx) => tx.select().from(followUps).where(and(eq(followUps.leadId, rossi), isNull(followUps.doneAt))));
+    expect(fus.map((f) => f.dueAt.toISOString())).toEqual(["2026-12-01T15:00:00.000Z"]);
+
+    // idempotent
+    expect(await applyBookings(env.sys, NOW)).toMatchObject({ linkedByName: 0, created: 0, statusesApplied: 0, followUpsMoved: 0 });
   });
 
   it("records a failure (e.g. bad token) without throwing away the last good numbers", async () => {

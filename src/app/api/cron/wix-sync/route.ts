@@ -4,7 +4,7 @@ import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
 import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
 import { runOpsSync } from "@/server/ops/sync";
-import { applyConsultStatuses, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
+import { applyBookings, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
 
 export const dynamic = "force-dynamic";
@@ -89,9 +89,9 @@ async function handle(req: NextRequest) {
   if (only !== "ops" && setmoreConfigured()) {
     try {
       const sm = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
-      // bookings move leads forward automatically (forward-only, see plannedConsultStatus)
-      const st = await applyConsultStatuses(systemCtx(orgId));
-      out.setmore = { ...sm, statusesApplied: st.applied, statusErrors: st.errors.length };
+      // bookings → leads: link or create, move statuses forward, replace stale follow-ups (see applyBookings)
+      const b = await applyBookings(systemCtx(orgId));
+      out.setmore = { ...sm, linkedByName: b.linkedByName, created: b.created, statusesApplied: b.statusesApplied, followUpsMoved: b.followUpsMoved, errors: b.errors.length, firstErrors: b.errors.slice(0, 3) };
     } catch (e) {
       console.error("[cron] setmore sync failed", e);
       out.setmore = { error: (e as Error).message };

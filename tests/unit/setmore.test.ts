@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bookingToRow, matchLead, pickValue, plannedConsultStatus } from "@/lib/setmore";
+import { bookingToRow, matchLead, pickValue, plannedConsultStatus, statusForNewLead, matchLeadByName } from "@/lib/setmore";
 
 const cust = { id: "c1", first_name: "Sofia", last_name: "Rossi", email_addresses: [{ value: "old@x.com", deleted: true }, { value: "Sofia.Rossi@Gmail.com", primary: true }], phone_numbers: [{ value: "905-555-0123" }] };
 
@@ -51,5 +51,27 @@ describe("plannedConsultStatus (forward only)", () => {
     for (const s of ["consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold"] as const) expect(plannedConsultStatus(s, [past, ahead], now)).toBeNull();
     expect(plannedConsultStatus("new", [cxl], now)).toBeNull();
     expect(plannedConsultStatus("new", [], now)).toBeNull();
+  });
+});
+
+describe("leads created from bookings", () => {
+  const now = new Date("2026-11-24T15:00:00Z");
+  const rules = { wonServices: ["existing booking"], proposalServices: ["quote review"] };
+  const b = (serviceName: string, at: string, status = "confirmed") => ({ serviceName, startsAt: new Date(at), endsAt: null, status });
+  it("takes the furthest stage the bookings show, by booking type", () => {
+    expect(statusForNewLead([b("In-Person Consultation - New Booking", "2026-12-01T15:00:00Z")], now, rules)).toBe("consult_scheduled");
+    expect(statusForNewLead([b("Phone Consultation", "2026-11-20T15:00:00Z")], now, rules)).toBe("consult_held");
+    expect(statusForNewLead([b("Phone Consultation", "2026-11-20T15:00:00Z"), b("Quote Review Call", "2026-12-02T15:00:00Z")], now, rules)).toBe("proposal_sent");
+    expect(statusForNewLead([b("Review Meeting at the Studio - Existing Booking", "2026-12-02T15:00:00Z")], now, rules)).toBe("won");
+  });
+  it("ignores cancelled bookings", () => {
+    expect(statusForNewLead([b("Review Meeting - Existing Booking", "2026-11-20T15:00:00Z", "cancelled")], now, rules)).toBeNull();
+  });
+  it("matches by full name only when exactly one lead has it", () => {
+    const leads = [{ id: "a", firstName: "Sofía", lastName: "Rossi" }, { id: "b", firstName: "Ana", lastName: "Silva" }, { id: "c", firstName: "Ana", lastName: "Silva" }];
+    expect(matchLeadByName("sofia  rossi", leads)).toBe("a");
+    expect(matchLeadByName("Ana Silva", leads)).toBeNull(); // ambiguous
+    expect(matchLeadByName("Sofia", leads)).toBeNull(); // first name alone
+    expect(matchLeadByName(null, leads)).toBeNull();
   });
 });

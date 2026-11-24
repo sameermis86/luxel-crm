@@ -1,8 +1,10 @@
-import { and, asc, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { withCtx, systemCtx, type Ctx, type Tx } from "@/db/client";
-import { appointments, integrationState, leads, type Status } from "@/db/schema";
-import { bookingToRow, matchLead, plannedConsultStatus, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
-import { updateLead, LeadError } from "@/server/leads/service";
+import { appointments, followUps, integrationState, leads, type Status } from "@/db/schema";
+import { bookingToRow, matchLead, matchLeadByName, plannedConsultStatus, statusForNewLead, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
+import { updateLead, setFollowUp, completeFollowUp, LeadError } from "@/server/leads/service";
+import { ingestLead } from "@/server/leads/intake";
+import { getSettings } from "@/server/settings";
 
 /**
  * Setmore → CRM: copies appointments (60 days back, 120 ahead) into `appointments`
@@ -248,4 +250,109 @@ export async function applyConsultStatuses(ctx: Ctx, now = new Date()) {
     }
   }
   return { planned: plan.length, applied, errors };
+}
+
+const CLOSED: Status[] = ["won", "lost", "unqualified", "not_reachable"];
+
+/**
+ * Everything the scheduled sync does with bookings once they're stored:
+ * 1. bookings with no lead: link to the one live lead with the same full name, otherwise create the lead
+ *    (status by booking type, see statusForNewLead; dated at the first booking);
+ * 2. move linked leads forward (applyConsultStatuses);
+ * 3. a lead with a consultation ahead isn't waiting on a follow-up: overdue follow-ups are closed and the
+ *    next one is set for the meeting itself (a follow-up someone set for later is left alone).
+ */
+export async function applyBookings(ctx: Ctx, now = new Date()) {
+  const errors: { what: string; error: string }[] = [];
+  const msg = (e: unknown) => (e instanceof LeadError ? e.message : String((e as Error)?.message ?? e));
+  let linkedByName = 0, created = 0, followUpsMoved = 0;
+  const settings = await withCtx(ctx, (tx) => getSettings(tx, ctx.orgId));
+
+  // 1. unmatched bookings, grouped by person
+  const loose = await withCtx(ctx, (tx) => tx.select().from(appointments).where(and(eq(appointments.source, "setmore"), isNull(appointments.leadId))));
+  const people = new Map<string, typeof loose>();
+  for (const a of loose) {
+    const key = a.emailNormalized ?? a.phoneE164 ?? a.customerExternalId ?? a.externalId;
+    people.set(key, [...(people.get(key) ?? []), a]);
+  }
+  if (people.size) {
+    const pool = await withCtx(ctx, (tx) =>
+      tx.select({ id: leads.id, firstName: leads.firstName, lastName: leads.lastName }).from(leads).where(and(isNull(leads.duplicateOfId), isNull(leads.archivedAt))),
+    );
+    for (const [key, list] of people) {
+      const first = [...list].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0];
+      const name = list.find((a) => a.customerName)?.customerName ?? null;
+      try {
+        await withCtx(ctx, async (tx) => {
+          let leadId = matchLeadByName(name, pool);
+          if (leadId) linkedByName++;
+          else {
+            const status = statusForNewLead(list, now, settings.setmore);
+            if (!status) return; // only cancelled bookings: not a lead
+            const when = first.startsAt.toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" });
+            const r = await ingestLead(
+              tx,
+              ctx,
+              {
+                fullName: name,
+                email: list.find((a) => a.email)?.email ?? null,
+                phone: list.find((a) => a.phoneE164)?.phoneE164 ?? null,
+                status,
+                message: `Booked in Setmore: ${list.map((a) => a.serviceName ?? "consultation").filter((v, i, all) => all.indexOf(v) === i).join(", ")} (first on ${when})`,
+                explicitSource: "other",
+                sourceDetail: "Setmore booking",
+              },
+              {
+                mode: "import",
+                submissionId: `setmore:${key}`,
+                onDuplicate: "merge_blanks",
+                autoFollowUp: false,
+                createdAt: first.startsAt < now ? first.startsAt : now,
+                now,
+                settings,
+                rawPayload: { form: "setmore", appointmentIds: list.map((a) => a.externalId) },
+              },
+            );
+            if (!r.lead) return;
+            leadId = r.lead.id;
+            if (r.outcome === "created") created++;
+          }
+          await tx.update(appointments).set({ leadId }).where(inArray(appointments.id, list.map((a) => a.id)));
+        });
+      } catch (e) {
+        errors.push({ what: `booking ${first.externalId}`, error: msg(e) });
+      }
+    }
+  }
+
+  // 2. forward-only status moves for linked leads
+  const st = await applyConsultStatuses(ctx, now);
+  errors.push(...st.errors.map((e) => ({ what: e.recordId, error: e.error })));
+
+  // 3. a consultation ahead replaces an overdue (or missing) follow-up
+  const ahead = await withCtx(ctx, (tx) =>
+    tx
+      .select({ leadId: appointments.leadId, startsAt: sql<Date>`min(${appointments.startsAt})`.mapWith((v) => new Date(v)), status: leads.status })
+      .from(appointments)
+      .innerJoin(leads, eq(leads.id, appointments.leadId))
+      .where(and(eq(appointments.source, "setmore"), eq(appointments.status, "confirmed"), gt(appointments.startsAt, now), isNull(leads.duplicateOfId), isNull(leads.archivedAt)))
+      .groupBy(appointments.leadId, leads.status),
+  );
+  for (const a of ahead) {
+    if (!a.leadId || CLOSED.includes(a.status)) continue;
+    try {
+      await withCtx(ctx, async (tx) => {
+        const open = await tx.select().from(followUps).where(and(eq(followUps.leadId, a.leadId!), isNull(followUps.doneAt)));
+        const overdue = open.filter((f) => f.dueAt <= now);
+        if (open.length > overdue.length) return; // someone already planned the next touch
+        for (const f of overdue) await completeFollowUp(tx, ctx, f.id, now, { reason: "consultation booked in Setmore" });
+        await setFollowUp(tx, ctx, a.leadId!, { dueAt: a.startsAt, note: "Consultation booked in Setmore: follow up after the meeting" }, now);
+        followUpsMoved++;
+      });
+    } catch (e) {
+      errors.push({ what: `follow-up ${a.leadId}`, error: msg(e) });
+    }
+  }
+
+  return { linkedByName, created, statusesApplied: st.applied, followUpsMoved, errors };
 }

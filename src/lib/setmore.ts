@@ -110,3 +110,38 @@ export function plannedConsultStatus(
   if (ahead && FUNNEL_RANK[current] < FUNNEL_RANK.consult_scheduled) return { to: "consult_scheduled", startsAt: ahead.startsAt };
   return null;
 }
+
+export interface BookingTypeRules { wonServices: string[]; proposalServices: string[] }
+type BookingLike = { startsAt: Date; endsAt: Date | null; status: string; serviceName: string | null };
+const has = (name: string | null, list: string[]) => !!name && list.some((x) => x.trim() && name.toLowerCase().includes(x.trim().toLowerCase()));
+
+/**
+ * Status for a lead created from Setmore bookings (someone not in the CRM yet): the furthest stage
+ * any confirmed booking shows. "Existing booking" services → Won, quote reviews → Proposal sent,
+ * consultations → Consult held (ended) or Consult scheduled (ahead). Null when nothing is confirmed.
+ */
+export function statusForNewLead(bookings: BookingLike[], now: Date, rules: BookingTypeRules): Status | null {
+  let best: Status | null = null;
+  for (const b of bookings) {
+    if (b.status !== "confirmed") continue;
+    const s: Status = has(b.serviceName, rules.wonServices)
+      ? "won"
+      : has(b.serviceName, rules.proposalServices)
+        ? "proposal_sent"
+        : (b.endsAt ?? b.startsAt) <= now ? "consult_held" : "consult_scheduled";
+    if (!best || FUNNEL_RANK[s] > FUNNEL_RANK[best]) best = s;
+  }
+  return best;
+}
+
+/** Name fallback when email and phone don't match: only when exactly one live lead has that full name. */
+export function matchLeadByName(
+  name: string | null,
+  leads: { id: string; firstName: string | null; lastName: string | null }[],
+): string | null {
+  const norm = (x: string) => x.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const n = name ? norm(name) : "";
+  if (!n.includes(" ")) return null; // a first name alone is too weak
+  const hits = leads.filter((l) => norm(`${l.firstName ?? ""} ${l.lastName ?? ""}`) === n);
+  return hits.length === 1 ? hits[0].id : null;
+}
