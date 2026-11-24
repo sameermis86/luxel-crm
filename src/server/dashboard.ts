@@ -2,9 +2,9 @@ import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { leads, type Source, type Status } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type WhereContext } from "@/lib/lead-filters";
-import { base, dims, FUNNEL, metricCards, nowCards, OUTCOMES, type DashFilter, type Metric, type OutcomeKey } from "@/lib/metrics";
+import { base, dims, FUNNEL, metricCards, nextActions, OUTCOMES, PIPELINE, type DashFilter, type Metric, type OutcomeKey } from "@/lib/metrics";
 import { addDaysToDate, lastOfMonth } from "@/lib/dates";
-import { countLeads } from "./leads/queries";
+import { countLeads, listLeads } from "./leads/queries";
 
 export interface CardValue {
   key: string;
@@ -46,10 +46,30 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
   const b = base(df);
   const bWhere = leadWhere(b, wc);
 
-  const [cards, now] = await Promise.all([
-    Promise.all(metricCards(df).map((m) => evalMetric(tx, m, wc))),
-    Promise.all(nowCards(df).map((m) => evalMetric(tx, m, wc))),
-  ]);
+  const cards = await Promise.all(metricCards(df).map((m) => evalMetric(tx, m, wc)));
+
+  // Next best actions: count + the first few leads, oldest problem first
+  const actions = await Promise.all(
+    nextActions(df, wc.now, tz, wc.settings.followUps).map(async (a) => {
+      const { rows, total } = await listLeads(tx, a.filter, wc, { ...a.sort, page: 1, per: 4 });
+      return {
+        key: a.key, title: a.title, hint: a.hint, tone: a.tone, why: a.why, count: total, href: leadsHref(a.filter, a.sort),
+        leads: rows.map((r) => ({
+          id: r.id, recordId: r.recordId, firstName: r.firstName, lastName: r.lastName, partnerName: r.partnerName,
+          eventType: r.eventType, eventDate: r.eventDate, ownerName: r.ownerName, status: r.status,
+          createdAt: r.createdAt, nextFollowUpAt: r.nextFollowUpAt, proposalSentAt: r.proposalSentAt,
+        })),
+      };
+    }),
+  );
+
+  // Live pipeline by stage
+  const pipeline = await Promise.all(
+    PIPELINE.map(async (p) => {
+      const f: LeadFilter = { ...dims(df), status: p.statuses };
+      return { key: p.key, label: p.label, value: await countLeads(tx, f, wc), href: leadsHref(f) };
+    }),
+  );
 
   // Leads by source, and how many of them are won now
   const srcRows = await tx
@@ -108,7 +128,7 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     };
   });
 
-  return { cards, now, bySource, funnel, trend, bucket };
+  return { cards, actions, pipeline, bySource, funnel, trend, bucket };
 }
 
 export type Dashboard = Awaited<ReturnType<typeof computeDashboard>>;

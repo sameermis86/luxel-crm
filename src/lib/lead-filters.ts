@@ -46,6 +46,8 @@ export const leadFilterSchema = z.object({
   reached: z.enum(Object.keys(FUNNEL_REACHED) as [keyof typeof FUNNEL_REACHED]).optional().catch(undefined),
   follow_up: z.enum(["overdue", "today", "upcoming", "none"]).optional().catch(undefined),
   awaiting: flag.catch(undefined),
+  /** "no": never contacted (no outbound contact logged); "yes": contacted at least once */
+  contacted: z.enum(["yes", "no"]).optional().catch(undefined),
   decided: flag.catch(undefined),
   returning: flag.catch(undefined),
   has_dupes: flag.catch(undefined),
@@ -65,6 +67,7 @@ export const SORTABLE = {
   qualification: leads.qualification,
   status: leads.status,
   next_follow_up: leads.nextFollowUpAt,
+  quoted: leads.proposalSentAt,
   created: leads.createdAt,
 } as const;
 export type SortKey = keyof typeof SORTABLE;
@@ -190,6 +193,8 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.returning) c.push(eq(leads.returningInquiry, true));
   if (f.import_batch) c.push(eq(leads.importBatchId, f.import_batch));
   if (f.awaiting) c.push(awaitingFollowUpSql(wc.now, wc.settings.followUps.newLeadNoContactHours));
+  if (f.contacted === "no") c.push(isNull(leads.lastContactedAt));
+  if (f.contacted === "yes") c.push(isNotNull(leads.lastContactedAt));
   if (f.follow_up) {
     const todayStart = startOfDayInTz(new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(wc.now), tz);
     const todayEnd = new Date(todayStart.getTime() + 86_400_000);
@@ -224,6 +229,7 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.awaiting) out.push("awaiting follow-up");
   if (f.decided) out.push("won or lost");
   if (f.follow_up) out.push(`follow-up ${f.follow_up}`);
+  if (f.contacted) out.push(f.contacted === "no" ? "never contacted" : "contacted");
   if (f.returning) out.push("returning inquiries");
   if (f.has_dupes) out.push("possible duplicates");
   return out;

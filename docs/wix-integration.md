@@ -1,6 +1,6 @@
 # Wix → Luxel CRM integration
 
-Every website inquiry lands in the CRM as a scored, assigned lead with a first
+Every website inquiry lands in the CRM as a qualified, assigned lead with a first
 follow-up due within 2 business hours. Two forms feed it:
 
 | Form on luxeldecor.com | How it reaches the CRM | Auth |
@@ -155,7 +155,7 @@ Event Contact Form inquiries with no explicit occasion are treated as weddings. 
 so push + pull together never double-count.
 
 The very first run imports existing records as a **backfill** (original dates, no assignment or follow-up). From then on,
-new submissions arrive as live leads (assigned, scored, first follow-up).
+new submissions arrive as live leads (assigned, qualified, first follow-up).
 
 Setup:
 

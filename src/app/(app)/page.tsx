@@ -1,120 +1,156 @@
 import Link from "next/link";
 import { withPage } from "@/server/page";
-import { computeDashboard } from "@/server/dashboard";
+import { computeDashboard, type Dashboard } from "@/server/dashboard";
 import { listUsers } from "@/server/leads/queries";
-import { parseDashFilter, RANGE_LABELS } from "@/lib/metrics";
+import { dashToParams, parseDashFilter, RANGE_LABELS, type DashFilter } from "@/lib/metrics";
 import { fmtDate, titleCase } from "@/lib/format";
 import { SOURCES, EVENT_TYPES } from "@/db/schema";
 import { SourceChart, TrendChart } from "@/components/dashboard-charts";
 import { C } from "@/lib/chart-colors";
-import type { CardValue } from "@/server/dashboard";
 
 export const dynamic = "force-dynamic";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
+type Action = Dashboard["actions"][number];
+
+const RANGE_PILLS = ["this_month", "last_30", "this_quarter", "ytd", "last_12m"] as const;
+const PILL_LABEL: Record<(typeof RANGE_PILLS)[number], string> = { this_month: "Month", last_30: "30 days", this_quarter: "Quarter", ytd: "YTD", last_12m: "12 months" };
 
 export default async function DashboardPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const data = await withPage(async (tx, p) => {
-    const df = parseDashFilter(sp, p.now, p.settings.businessHours.timezone);
+  const { df, d, users, now, tz } = await withPage(async (tx, p) => {
+    const tz = p.settings.businessHours.timezone;
+    const df = parseDashFilter(sp, p.now, tz);
     const [d, users] = await Promise.all([computeDashboard(tx, df, p.wc), listUsers(tx)]);
-    return { df, d, users };
+    return { df, d, users, now: p.now, tz };
   });
-  const { df, d, users } = data;
+
   const one = (v?: string[]) => (v?.length === 1 ? v[0] : "");
+  const rangeLabel = df.range && df.range !== "custom" ? RANGE_LABELS[df.range as keyof typeof RANGE_LABELS] : `${fmtDate(df.from)} – ${fmtDate(df.to)}`;
+  const filtersOn = [df.owner, df.source, df.event_type].filter((v) => v?.length).length;
+  const card = (k: string) => d.cards.find((c) => c.key === k)!;
+  const leadsN = card("leads").value;
+  const pct = (n: number) => (leadsN ? `${Math.round((n / leadsN) * 100)}% of leads` : "");
+  const todo = d.actions.filter((a) => a.count > 0 && a.tone !== "quiet");
+  const todoCount = todo.reduce((s, a) => s + a.count, 0);
+  const quiet = d.actions.filter((a) => a.count > 0 && a.tone === "quiet");
+  const outcome = (["open", "quote_out", "won", "lost"] as const).map((k) => ({ k, n: d.trend.reduce((s, t) => s + t[k], 0) }));
+  const pipeMax = Math.max(1, ...d.pipeline.map((p) => p.value));
   const funnelMax = Math.max(1, d.funnel[0]?.value ?? 1);
-  const leadsCount = d.cards.find((c) => c.key === "leads")!.value;
-  const rangeLabel = df.range && df.range !== "custom" ? RANGE_LABELS[df.range as keyof typeof RANGE_LABELS].toLowerCase() : `${fmtDate(df.from)} – ${fmtDate(df.to)}`;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl">Lead desk</h1>
-        <p className="mt-1 text-sm text-muted">
-          {fmtDate(df.from)} – {fmtDate(df.to)} · every number opens the leads behind it; hover a number for how it is counted
-        </p>
-      </div>
-
-      {/* Filters: one row above everything */}
-      <form method="get" className="card flex flex-wrap items-end gap-3 p-3">
-        <label className="block">
-          <span className="label">Date range</span>
-          <select name="range" defaultValue={df.range} className="input">
-            {Object.entries(RANGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            <option value="custom">Custom…</option>
-          </select>
-        </label>
-        <label className="block"><span className="label">From</span><input type="date" name="from" defaultValue={df.from} className="input" /></label>
-        <label className="block"><span className="label">To</span><input type="date" name="to" defaultValue={df.to} className="input" /></label>
-        <Sel name="owner" label="Owner" value={one(df.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
-        <Sel name="source" label="Source" value={one(df.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
-        <Sel name="event_type" label="Event type" value={one(df.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
-        <button className="btn-primary">Apply</button>
-        <Link href="/" className="btn-ghost">Reset</Link>
-        <p className="w-full text-xs text-muted">Choose “Custom…” to use the From/To dates; the other ranges ignore them.</p>
-      </form>
-
-      {/* Metric cards: the range group, then today */}
-      <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
-        <section aria-labelledby="range-h">
-          <h2 id="range-h" className="mb-2 text-xs tracking-wide text-muted uppercase">Leads that came in · {rangeLabel}</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {d.cards.map((c) => (
-              <Card key={c.key} c={c} sub={c.numerator ? `${c.numerator.value} ${c.nouns![0]} of ${c.denominator!.value} ${c.nouns![1]}` : c.key !== "leads" && leadsCount ? `${Math.round((c.value / leadsCount) * 100)}% of leads` : "View leads →"} />
-            ))}
-          </div>
-        </section>
-        <section aria-labelledby="now-h">
-          <h2 id="now-h" className="mb-2 text-xs tracking-wide text-muted uppercase">Right now</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {d.now.map((c) => (
-              <Card key={c.key} c={c} sub="View leads →" alert={c.key === "awaiting" && c.value > 0} />
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="card p-4">
-          <h2 className="text-xl">Leads by source</h2>
-          <p className="mb-2 text-xs text-muted">Leads created in range, and how many of them are won. Click a bar for the list.</p>
-          <SourceChart data={d.bySource.map((s) => ({ ...s, label: titleCase(s.source) }))} />
-          <TableView
-            head={["Source", "Leads", "Won"]}
-            rows={d.bySource.map((s) => [titleCase(s.source), <Link key="l" className="underline" href={s.href}>{s.leads}</Link>, <Link key="w" className="underline" href={s.wonHref}>{s.won}</Link>])}
-          />
-        </section>
-
-        <section className="card p-4">
-          <h2 className="text-xl">Funnel</h2>
-          <p className="mb-3 text-xs text-muted">Leads that came in during the range, by the furthest stage they have reached.</p>
-          <ol className="space-y-2">
-            {d.funnel.map((f, i) => {
-              const prev = i ? d.funnel[i - 1].value : null;
+    <div className="space-y-5">
+      {/* Header: greeting + range */}
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted uppercase">
+            {now.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: tz })}
+          </p>
+          <h1 className="mt-0.5 text-3xl">
+            {todoCount ? <>{todoCount} lead{todoCount === 1 ? "" : "s"} need you today</> : "You're all caught up"}
+          </h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <nav aria-label="Date range" className="inline-flex rounded-md border border-edge bg-card p-0.5 text-sm">
+            {RANGE_PILLS.map((r) => {
+              const sp2 = dashToParams({ ...df, range: r });
+              const active = df.range === r;
               return (
-                <li key={f.key}>
-                  <Link href={f.href} className="group block" aria-label={`${f.label}: ${f.value} leads`}>
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium group-hover:underline">{f.label}</span>
-                      <span className="tabular">
-                        {f.value}
-                        {prev ? <span className="ml-2 text-xs text-muted">{((f.value / prev) * 100).toFixed(0)}% of previous</span> : null}
-                      </span>
-                    </div>
-                    <div className="mt-1 h-6 rounded bg-paper">
-                      <div className="h-6 rounded-r-[4px] group-hover:opacity-90" style={{ width: `${Math.max(1.5, (f.value / funnelMax) * 100)}%`, background: f.key === "won" ? C.won : C.leads }} />
-                    </div>
-                  </Link>
-                </li>
+                <Link
+                  key={r}
+                  href={`/?${sp2}`}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded px-2.5 py-1 transition-colors duration-150 ${active ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
+                >
+                  {PILL_LABEL[r]}
+                </Link>
               );
             })}
-          </ol>
+          </nav>
+          <FilterMenu df={df} users={users} one={one} filtersOn={filtersOn} />
+        </div>
+      </header>
+
+      {/* KPI strip: all about the leads that came in during the range */}
+      <section className="card overflow-hidden" aria-labelledby="kpi-h">
+        <h2 id="kpi-h" className="border-b border-edge px-4 py-2 text-xs font-medium tracking-wide text-muted uppercase" style={{ fontFamily: "var(--font-sans)" }}>
+          Leads that came in · {rangeLabel}
+        </h2>
+        <div className="grid grid-cols-2 divide-edge sm:grid-cols-3 lg:grid-cols-5 lg:divide-x [&>*]:border-edge max-lg:[&>*]:border-b">
+          <Kpi c={card("leads")} sub="View all" />
+          <Kpi c={card("needs_follow_up")} sub={pct(card("needs_follow_up").value) || "Open leads waiting on you"} alert />
+          <Kpi c={card("quoted")} sub={pct(card("quoted").value)} />
+          <Kpi c={card("won")} sub={pct(card("won").value)} />
+          <Kpi c={card("win_rate")} sub={card("win_rate").numerator ? `${card("win_rate").numerator!.value} won of ${card("win_rate").denominator!.value} decided` : ""} />
+        </div>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Next best actions */}
+        <section className="card" aria-labelledby="actions-h">
+          <div className="flex items-baseline justify-between border-b border-edge px-4 py-3">
+            <h2 id="actions-h" className="text-xl">Next best actions</h2>
+            <Link href="/follow-ups" className="text-sm text-muted hover:text-ink">Follow-ups →</Link>
+          </div>
+          {todo.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted">Nothing waiting. New inquiries and due follow-ups will show up here.</p>
+          ) : (
+            <ol className="divide-y divide-edge">
+              {todo.map((a) => <ActionGroup key={a.key} a={a} now={now} tz={tz} />)}
+            </ol>
+          )}
+          {quiet.map((a) => (
+            <Link key={a.key} href={a.href} className="flex items-center justify-between gap-3 border-t border-edge bg-paper/50 px-4 py-2.5 text-sm hover:bg-paper">
+              <span><span className="font-medium">{a.title}</span> <span className="text-muted">· {a.hint}</span></span>
+              <span className="tabular text-muted">{a.count} →</span>
+            </Link>
+          ))}
         </section>
+
+        <div className="space-y-5">
+          {/* Live pipeline */}
+          <section className="card p-4" aria-labelledby="pipe-h">
+            <div className="flex items-baseline justify-between">
+              <h2 id="pipe-h" className="text-lg">Open pipeline</h2>
+              <span className="text-xs text-muted">right now</span>
+            </div>
+            <ul className="mt-3 space-y-2.5">
+              {d.pipeline.map((p) => (
+                <li key={p.key}>
+                  <Link href={p.href} className="group block">
+                    <div className="flex justify-between text-sm"><span className="group-hover:underline">{p.label}</span><span className="tabular">{p.value}</span></div>
+                    <div className="mt-1 h-1.5 rounded-full bg-paper"><div className="h-1.5 rounded-full" style={{ width: `${p.value ? Math.max(2, (p.value / pipeMax) * 100) : 0}%`, background: C.leads }} /></div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {/* Outcome of the range's leads */}
+          <section className="card p-4" aria-labelledby="out-h">
+            <h2 id="out-h" className="text-lg">Where they stand</h2>
+            <p className="text-xs text-muted">The {leadsN} leads from {rangeLabel.toLowerCase()}</p>
+            <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-paper" aria-hidden>
+              {outcome.map((o) => o.n > 0 && <div key={o.k} style={{ width: `${(o.n / Math.max(1, leadsN)) * 100}%`, background: C[o.k] }} className="border-r-2 border-card last:border-r-0" />)}
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {outcome.map((o) => (
+                <div key={o.k} className="flex items-center justify-between gap-2">
+                  <dt className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: C[o.k] }} aria-hidden />{OUTCOME_LABEL[o.k]}</dt>
+                  <dd className="tabular">{o.n}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
       </div>
 
-      <section className="card p-4">
-        <h2 className="text-xl">Leads per {d.bucket}</h2>
-        <p className="mb-2 text-xs text-muted">When leads came in, colored by where they stand now. Click a segment for those leads.</p>
+      {/* Trend */}
+      <section className="card p-4" aria-labelledby="trend-h">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="trend-h" className="text-lg">Leads per {d.bucket}</h2>
+          <span className="text-xs text-muted">when they came in, colored by where they stand now</span>
+        </div>
         <TrendChart data={d.trend} />
         <TableView
           head={[d.bucket === "month" ? "Month" : "Week of", "Open", "Quote out", "Won", "Lost / unqualified", "Total"]}
@@ -125,7 +161,163 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
           ])}
         />
       </section>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="card p-4" aria-labelledby="src-h">
+          <div className="flex items-baseline justify-between">
+            <h2 id="src-h" className="text-lg">Sources</h2>
+            <span className="text-xs text-muted">leads and wins, {rangeLabel.toLowerCase()}</span>
+          </div>
+          <SourceChart data={d.bySource.map((s) => ({ ...s, label: titleCase(s.source) }))} />
+          <TableView
+            head={["Source", "Leads", "Won"]}
+            rows={d.bySource.map((s) => [titleCase(s.source), <Link key="l" className="underline" href={s.href}>{s.leads}</Link>, <Link key="w" className="underline" href={s.wonHref}>{s.won}</Link>])}
+          />
+        </section>
+
+        <section className="card p-4" aria-labelledby="fun-h">
+          <div className="flex items-baseline justify-between">
+            <h2 id="fun-h" className="text-lg">Funnel</h2>
+            <span className="text-xs text-muted">furthest stage reached</span>
+          </div>
+          <ol className="mt-3 space-y-2.5">
+            {d.funnel.map((f, i) => {
+              const prev = i ? d.funnel[i - 1].value : null;
+              return (
+                <li key={f.key}>
+                  <Link href={f.href} className="group block" aria-label={`${f.label}: ${f.value} leads`}>
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span className="group-hover:underline">{f.label}</span>
+                      <span className="tabular">
+                        {prev ? <span className="mr-2 text-xs text-muted">{((f.value / prev) * 100).toFixed(0)}%</span> : null}
+                        {f.value}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2 rounded-full bg-paper">
+                      <div className="h-2 rounded-full" style={{ width: `${f.value ? Math.max(1.5, (f.value / funnelMax) * 100) : 0}%`, background: f.key === "won" ? C.won : C.leads }} />
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      </div>
     </div>
+  );
+}
+
+const OUTCOME_LABEL = { open: "Open", quote_out: "Quote out", won: "Won", lost: "Lost / unqualified" } as const;
+const TONE = { urgent: "bg-bloom", normal: "bg-amber", quiet: "bg-muted" } as const;
+
+function Kpi({ c, sub, alert }: { c: Dashboard["cards"][number]; sub: string; alert?: boolean }) {
+  return (
+    <Link href={c.href} title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value} className="group block px-4 py-3.5 transition-colors duration-150 hover:bg-paper/60">
+      <div className="text-xs text-muted">{c.label}</div>
+      <div className={`mt-0.5 font-display text-[28px] leading-tight tabular ${alert && c.value > 0 ? "text-bloom" : ""}`}>{c.display}</div>
+      <div className="mt-0.5 truncate text-xs text-muted group-hover:text-ink">{sub}</div>
+    </Link>
+  );
+}
+
+function ActionGroup({ a, now, tz }: { a: Action; now: Date; tz: string }) {
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${TONE[a.tone]}`} aria-hidden />
+          <h3 className="truncate text-[15px] font-medium" style={{ fontFamily: "var(--font-sans)" }}>{a.title}</h3>
+          <span className="chip border-edge text-muted tabular">{a.count}</span>
+        </div>
+        <Link href={a.href} className="shrink-0 text-sm text-muted hover:text-ink">{a.count > a.leads.length ? `All ${a.count}` : "Open list"} →</Link>
+      </div>
+      <p className="mt-0.5 pl-4 text-xs text-muted">{a.hint}</p>
+      <ul className="mt-2 space-y-1 pl-4">
+        {a.leads.map((l) => (
+          <li key={l.id}>
+            <Link href={`/leads/${l.id}`} className="flex items-center gap-3 rounded-md px-2 py-1.5 -mx-2 hover:bg-paper">
+              <Initials name={l.ownerName} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">
+                  {[l.firstName, l.lastName].filter(Boolean).join(" ") || "(no name)"}
+                  {l.partnerName && <span className="text-muted"> &amp; {l.partnerName}</span>}
+                </span>
+                <span className="block truncate text-xs text-muted">
+                  {titleCase(l.eventType)}{l.eventDate ? ` · ${fmtDate(l.eventDate)}` : " · date TBD"} · {l.recordId}
+                </span>
+              </span>
+              <span className={`shrink-0 text-xs tabular ${a.tone === "urgent" ? "text-bloom" : "text-muted"}`}>{why(a.why, l, now, tz)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function why(kind: Action["why"], l: Action["leads"][number], now: Date, tz: string) {
+  const days = (d: Date | string | null) => (d ? Math.floor((now.getTime() - new Date(d).getTime()) / 86_400_000) : null);
+  const ago = (d: Date | string | null) => {
+    const n = days(d);
+    if (n == null) return "";
+    if (n < 1) {
+      const h = Math.max(1, Math.round((now.getTime() - new Date(d!).getTime()) / 3_600_000));
+      return `${h}h`;
+    }
+    return `${n}d`;
+  };
+  switch (kind) {
+    case "created":
+      return `waiting ${ago(l.createdAt)}`;
+    case "follow_up":
+      if (!l.nextFollowUpAt) return "";
+      return new Date(l.nextFollowUpAt) < now
+        ? `${ago(l.nextFollowUpAt)} overdue`
+        : `due ${new Date(l.nextFollowUpAt).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: tz })}`;
+    case "quoted":
+      return l.proposalSentAt ? `quoted ${ago(l.proposalSentAt)} ago` : "";
+    case "event": {
+      if (!l.eventDate) return "no event date";
+      const n = Math.round((new Date(l.eventDate + "T12:00:00Z").getTime() - now.getTime()) / 86_400_000);
+      return n >= 0 ? `event in ${n}d` : "event passed";
+    }
+  }
+}
+
+function Initials({ name }: { name: string | null }) {
+  const t = name ? name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() : "—";
+  return (
+    <span title={name ? `Owner: ${name}` : "Unassigned"} className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-medium ${name ? "bg-stem-soft text-stem" : "border border-dashed border-edge text-muted"}`}>
+      {t}
+    </span>
+  );
+}
+
+function FilterMenu({ df, users, one, filtersOn }: { df: DashFilter; users: { id: string; name: string }[]; one: (v?: string[]) => string; filtersOn: number }) {
+  return (
+    <details className="relative">
+      <summary className="btn cursor-pointer list-none">
+        Filters{filtersOn ? <span className="chip border-ink/20 bg-ink text-paper">{filtersOn}</span> : null}
+      </summary>
+      <form method="get" className="card absolute right-0 z-20 mt-1 w-72 space-y-3 p-3 shadow-lg">
+        {df.range !== "custom" && <input type="hidden" name="range" value={df.range} />}
+        <Sel name="owner" label="Owner" value={one(df.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
+        <Sel name="source" label="Source" value={one(df.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
+        <Sel name="event_type" label="Event type" value={one(df.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
+        <fieldset>
+          <legend className="label">Custom dates</legend>
+          <div className="flex gap-2">
+            <input type="date" name="from" defaultValue={df.range === "custom" ? df.from : ""} className="input" aria-label="From" />
+            <input type="date" name="to" defaultValue={df.range === "custom" ? df.to : ""} className="input" aria-label="To" />
+          </div>
+          <p className="mt-1 text-[11px] text-muted">Leave empty to use the range buttons.</p>
+        </fieldset>
+        <div className="flex justify-between">
+          <Link href="/" className="btn-ghost">Reset</Link>
+          <button className="btn-primary">Apply</button>
+        </div>
+      </form>
+    </details>
   );
 }
 
@@ -141,21 +333,11 @@ function Sel({ name, label, value, options }: { name: string; label: string; val
   );
 }
 
-function Card({ c, sub, alert }: { c: CardValue; sub: string; alert?: boolean }) {
-  return (
-    <Link href={c.href} className="card group block p-4 transition-colors hover:border-ink/40" title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value}>
-      <div className="text-xs tracking-wide text-muted uppercase">{c.label}</div>
-      <div className={`mt-1 font-display text-3xl tabular ${alert ? "text-bloom" : ""}`}>{c.display}</div>
-      <div className="mt-1 text-xs text-muted">{sub}</div>
-    </Link>
-  );
-}
-
 function TableView({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   if (!rows.length) return null;
   return (
     <details className="mt-2 text-sm">
-      <summary className="cursor-pointer text-xs text-muted">View as table</summary>
+      <summary className="cursor-pointer text-xs text-muted hover:text-ink">View as table</summary>
       <table className="mt-2 w-full">
         <thead><tr>{head.map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
         <tbody className="divide-y divide-edge">

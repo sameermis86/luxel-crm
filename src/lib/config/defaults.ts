@@ -28,6 +28,10 @@ export const followUpSchema = z.object({
   afterProposalDays: z.number(),
   newLeadNoContactHours: z.number(),
   digestHour: z.number(),
+  /** dashboard action queue: an uncontacted inquiry counts as "new" for this many days */
+  freshInquiryDays: z.number().int().min(1).default(14),
+  /** dashboard action queue: chase a quote with no decision after this many days */
+  chaseQuoteDays: z.number().int().min(1).default(7),
 });
 
 export const utmRuleSchema = z.object({
@@ -76,6 +80,8 @@ export const DEFAULT_SETTINGS: Settings = {
     afterProposalDays: 3,
     newLeadNoContactHours: 24,
     digestHour: 8,
+    freshInquiryDays: 14,
+    chaseQuoteDays: 7,
   },
   utmRules: [
     { source: "google", medium: "cpc", result: "google_ads" },

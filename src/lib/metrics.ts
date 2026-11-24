@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { SQL } from "drizzle-orm";
 import { EVENT_TYPES, SOURCES, type Status } from "@/db/schema";
-import { leadWhere, leadsHref, type LeadFilter, type WhereContext, FUNNEL_REACHED } from "./lead-filters";
+import { leadWhere, leadsHref, type LeadFilter, type SortKey, type WhereContext, FUNNEL_REACHED } from "./lead-filters";
 import { addDaysToDate, dateInTz, firstOfMonthInTz, lastOfMonth } from "./dates";
 
 /**
@@ -66,7 +66,8 @@ export function parseDashFilter(p: Record<string, string | string[] | undefined>
   const raw = Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : v]));
   const f = dashFilterSchema.parse(raw);
   let { from, to } = f;
-  const range = f.range ?? (from || to ? "custom" : "last_12m");
+  // explicit dates win over a named range (the filter menu sends both)
+  const range = from || to ? "custom" : (f.range ?? "last_12m");
   if (range !== "custom") ({ from, to } = rangeDates(range, now, tz));
   from ??= firstOfMonthInTz(now, tz);
   to ??= dateInTz(now, tz);
@@ -128,6 +129,7 @@ export function metricCards(df: DashFilter): Metric[] {
   const b = base(df);
   return [
     { key: "leads", label: "Leads", definition: "Leads that came in during the range (merged duplicates and undone imports excluded).", kind: "count", filter: b },
+    { key: "needs_follow_up", label: "Needs follow-up", definition: "Of those leads, the open ones whose follow-up is due, new ones not contacted within 24h, or open ones with no follow-up set.", kind: "count", filter: { ...b, awaiting: true } },
     { key: "quoted", label: "Got a quote", definition: "Of those leads, how many have reached Proposal sent or Won.", kind: "count", filter: { ...b, reached: "proposal" } },
     { key: "won", label: "Won", definition: "Of those leads, how many are Won now.", kind: "count", filter: { ...b, status: ["won"] } },
     {
@@ -142,15 +144,50 @@ export function metricCards(df: DashFilter): Metric[] {
   ];
 }
 
-/** Numbers about today, whatever the date range. */
-export function nowCards(df: DashFilter): Metric[] {
+/* -------------------------------------------------------------------------- */
+/* Next best actions                                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface ActionDef {
+  key: string;
+  title: string;
+  hint: string;
+  tone: "urgent" | "normal" | "quiet";
+  filter: LeadFilter;
+  sort: { sort: SortKey; dir: "asc" | "desc" };
+  /** which date explains why the lead is here */
+  why: "created" | "follow_up" | "quoted" | "event";
+}
+
+/**
+ * The work queue, in priority order. Each action is a LeadFilter, so its count
+ * opens exactly that list. Not limited by the date range: this is today's work.
+ */
+export function nextActions(df: DashFilter, now: Date, tz: string, cfg: { freshInquiryDays: number; chaseQuoteDays: number }): ActionDef[] {
+  const d = dims(df);
+  const today = dateInTz(now, tz);
+  const fresh = addDaysToDate(today, -(cfg.freshInquiryDays - 1));
+  const weeks = (n: number) => (n % 7 === 0 ? `${n / 7 === 1 ? "a week" : `${n / 7} weeks`}` : `${n} days`);
   return [
-    { key: "awaiting", label: "Needs follow-up", definition: "Open leads whose follow-up is due, new leads not contacted within 24h, or open leads with no follow-up set.", kind: "count", filter: { ...dims(df), awaiting: true } },
-    { key: "awaiting_decision", label: "Quote out, no decision", definition: "Leads in Proposal sent right now.", kind: "count", filter: { ...dims(df), status: ["proposal_sent"] } },
+    { key: "reply_new", title: "Reply to new inquiries", hint: `Came in during the last ${cfg.freshInquiryDays === 7 ? "week" : weeks(cfg.freshInquiryDays)} and haven't been contacted. Fast replies win.`, tone: "urgent", filter: { ...d, status: ["new"], contacted: "no", created_from: fresh }, sort: { sort: "created", dir: "asc" }, why: "created" },
+    { key: "overdue", title: "Overdue follow-ups", hint: "The follow-up date has passed.", tone: "urgent", filter: { ...d, follow_up: "overdue", contacted: "yes" }, sort: { sort: "next_follow_up", dir: "asc" }, why: "follow_up" },
+    { key: "due_today", title: "Follow-ups due today", hint: "Scheduled for later today.", tone: "normal", filter: { ...d, follow_up: "today", contacted: "yes" }, sort: { sort: "next_follow_up", dir: "asc" }, why: "follow_up" },
+    { key: "chase_quotes", title: "Chase quotes", hint: `Quote sent over ${weeks(cfg.chaseQuoteDays)} ago and still no decision.`, tone: "normal", filter: { ...d, status: ["proposal_sent"], quoted_to: addDaysToDate(today, -cfg.chaseQuoteDays) }, sort: { sort: "quoted", dir: "asc" }, why: "quoted" },
+    { key: "no_next_step", title: "Set a next step", hint: "In progress but no follow-up is scheduled.", tone: "normal", filter: { ...d, status: ["contacted", "consult_scheduled", "consult_held", "proposal_sent", "on_hold"], follow_up: "none" }, sort: { sort: "event_date", dir: "asc" }, why: "event" },
+    { key: "stale_new", title: "Old inquiries never answered", hint: `Older than ${weeks(cfg.freshInquiryDays)} with no contact. Reach out once, or mark them lost.`, tone: "quiet", filter: { ...d, status: ["new"], contacted: "no", created_to: addDaysToDate(fresh, -1) }, sort: { sort: "created", dir: "desc" }, why: "created" },
   ];
 }
 
 /** Where each lead stands now, in four groups (the trend chart's stacks). */
+/** Live pipeline right now, by stage (not limited by the date range). */
+export const PIPELINE: { key: string; label: string; statuses: Status[] }[] = [
+  { key: "new", label: "New", statuses: ["new"] },
+  { key: "contacted", label: "Contacted", statuses: ["contacted"] },
+  { key: "consult", label: "Consult", statuses: ["consult_scheduled", "consult_held"] },
+  { key: "quote_out", label: "Quote out", statuses: ["proposal_sent"] },
+  { key: "on_hold", label: "On hold", statuses: ["on_hold"] },
+];
+
 export const OUTCOMES = [
   { key: "open", label: "Open", statuses: ["new", "contacted", "consult_scheduled", "consult_held", "on_hold"] },
   { key: "quote_out", label: "Quote out", statuses: ["proposal_sent"] },

@@ -1,7 +1,7 @@
 # Luxel CRM: lead management
 
 Lead desk for **Luxel Decor & Flowers**. Every inquiry is captured (Wix Quote
-Builder, Wix contact forms, manual entry, CSV import), scored, qualified,
+Builder, Wix contact forms, manual entry, CSV import), qualified,
 assigned, followed up and tracked to a sent quote and a won/lost outcome (revenue itself lives in the
 proposals tool). Every change is recorded in an
 append-only audit trail.
@@ -36,7 +36,7 @@ Other scripts:
 |---|---|
 | `pnpm intake:test [url]` | Posts sample Quote Builder + Contact payloads to the Wix webhook, twice each (second is a no-op) |
 | `pnpm backfill:wix --api` / `--csv file.csv` | Imports historical Wix form submissions (`--dry-run` to preview) |
-| `pnpm job digest` / `pnpm job nightly` | Runs the 8:00 digest or the nightly rescore + duplicate scan by hand |
+| `pnpm job digest` / `pnpm job nightly` | Runs the 8:00 digest or the nightly requalify + duplicate scan by hand |
 | `pnpm inngest:dev` | Local Inngest dev server (set `INNGEST_DEV=1`) |
 | `pnpm db:generate` / `pnpm db:migrate` | New migration from `src/db/schema.ts` / apply migrations |
 
@@ -46,23 +46,23 @@ Other scripts:
 Wix Quote Builder (Velo fetch) ─┐
 Wix contact forms (Automation) ─┼─► POST /api/intake/wix ─┐
 Manual "New lead" form ─────────┤                         ├─► ingestLead(): idempotency → normalize → source →
-CSV import ─────────────────────┘                         │   duplicates → createLead (score + qualify) → assign → first follow-up
+CSV import ─────────────────────┘                         │   duplicates → createLead (qualify) → assign → first follow-up
                                                           ▼
                      updateLead(): the ONLY writer of `leads`: diff → validate status → save →
-                     one lead_events row per change → rescore/requalify, all in one transaction
+                     one lead_events row per change → requalify, all in one transaction
 ```
 
 | Where | What |
 |---|---|
 | `src/db/schema.ts`, `drizzle/` | Schema + migrations. `0002_rls_audit.sql` holds the RLS policies, grants and the append-only trigger |
-| `src/lib/config/defaults.ts` | Every tunable: scoring weights, thresholds, service area, business hours, UTM mapping. Owners override in Settings |
-| `src/lib/scoring.ts`, `qualification.ts`, `source.ts`, `duplicates.ts`, `assignment.ts`, `status.ts` | Pure, unit-tested business rules |
+| `src/lib/config/defaults.ts` | Every tunable: qualification thresholds, service area, business hours, UTM mapping. Owners override in Settings |
+| `src/lib/qualification.ts`, `source.ts`, `duplicates.ts`, `assignment.ts`, `status.ts` | Pure, unit-tested business rules |
 | `src/server/leads/service.ts` | `createLead`, `updateLead`, activities, follow-ups |
 | `src/server/leads/intake.ts` | The shared intake pipeline |
 | `src/lib/lead-filters.ts` | One filter model: URL ⇄ filter ⇄ SQL (leads list, export, bulk actions, dashboard) |
 | `src/lib/metrics.ts` | Every dashboard number defined once, as a filter → its SQL and its `/leads?…` link |
 | `src/server/import/csv.ts`, `src/lib/csv-import.ts` | CSV mapping, presets (interim tracker), preview, commit, undo |
-| `src/server/jobs.ts`, `src/inngest/` | Daily digest (08:00 Toronto), nightly rescore + duplicate scan |
+| `src/server/jobs.ts`, `src/inngest/` | Daily digest (08:00 Toronto), nightly requalify + duplicate scan |
 | `docs/wix-integration.md` | Velo snippet, Automation setup, testing, backfill |
 
 ### Guarantees and how they're enforced
@@ -73,7 +73,7 @@ CSV import ─────────────────────┘   
 - **Permissions:** owner / manager / staff checked in one `authorize()` layer *and* in Postgres RLS (staff see only their own and unassigned leads). Every query runs in `withCtx()`, which sets the org/user/role for RLS.
 - **Dashboard = list.** Card, chart and table links are generated from the same filter the number was counted with. `tests/integration/dashboard.test.ts` follows every link and asserts the count matches.
 - **Idempotent intake:** `submission_id` (or a content fingerprint for Automations) is unique per org. Re-imports are no-ops via a per-row fingerprint.
-- **Fair scoring:** `scoreLead()` takes only fit, budget, timing, intent, contactability and engagement fields; a test confirms the name has no effect.
+- **Fair qualification:** `qualify()` takes only budget, event date, venue city and contact fields; names never reach it.
 
 ## Deploying (Vercel + Supabase)
 

@@ -80,7 +80,7 @@ describe("acceptance: every dashboard number lists exactly that many records", (
         const d = await withCtx(who, (tx) => computeDashboard(tx, df, wc));
 
         const checks: [string, number, string][] = [];
-        for (const c of [...d.cards, ...d.now]) {
+        for (const c of d.cards) {
           if (c.numerator) {
             checks.push([`${c.key} numerator`, c.numerator.value, c.numerator.href]);
             checks.push([`${c.key} denominator`, c.denominator!.value, c.denominator!.href]);
@@ -91,6 +91,11 @@ describe("acceptance: every dashboard number lists exactly that many records", (
           checks.push([`source ${s.source} won`, s.won, s.wonHref]);
         }
         for (const f of d.funnel) checks.push([`funnel ${f.key}`, f.value, f.href]);
+        for (const a of d.actions) {
+          checks.push([`action ${a.key}`, a.count, a.href]);
+          expect(a.leads.length).toBe(Math.min(4, a.count));
+        }
+        for (const p of d.pipeline) checks.push([`pipeline ${p.key}`, p.value, p.href]);
         for (const t of d.trend) {
           checks.push([`${d.bucket} ${t.period}`, t.total, t.href]);
           for (const k of ["open", "quote_out", "won", "lost"] as const) checks.push([`${d.bucket} ${t.period} ${k}`, t[k], t.hrefs[k]]);
@@ -114,18 +119,27 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     const wc: WhereContext = { now: NOW, userId: null, settings };
     const d = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ from: "2026-08-31", to: "2026-11-30" }, NOW, TZ), wc));
     // (lead 0 is 00:00 UTC Sep 1 = 8pm Aug 31 in Toronto, so the range starts Aug 31)
-    const card = (k: string) => [...d.cards, ...d.now].find((c) => c.key === k)!;
+    const card = (k: string) => d.cards.find((c) => c.key === k)!;
     expect(card("leads").value).toBe(60);
     expect(d.bucket).toBe("week"); // 91 days
     expect(card("quoted").value).toBe(8); // proposals for i % 8 === 0, incl. the 4 later won
     expect(card("won").value).toBe(4); // i = 0, 16, 32, 48
     expect(card("win_rate").numerator!.value).toBe(4);
     expect(card("win_rate").denominator!.value).toBe(11); // 4 won + 7 lost (i % 8 === 4)
-    expect(card("awaiting_decision").value).toBe(4);
+    expect(d.pipeline.find((p) => p.key === "quote_out")!.value).toBe(4);
+    expect(card("needs_follow_up").value).toBeGreaterThan(0);
     expect(d.funnel.map((f) => f.value)).toEqual([...d.funnel.map((f) => f.value)].sort((a, b) => b - a)); // monotone
     expect(d.bySource.reduce((s, x) => s + x.leads, 0)).toBe(60);
     const sum = (k: "open" | "quote_out" | "won" | "lost") => d.trend.reduce((s, t) => s + t[k], 0);
     expect([sum("quote_out"), sum("won"), sum("lost")]).toEqual([4, 4, 7]);
+  });
+
+  it("next best actions don't double-list a lead between replying and following up", async () => {
+    const settings = await withCtx(env.sys, (tx) => getSettings(tx, env.orgId));
+    const wc: WhereContext = { now: NOW, userId: null, settings };
+    const d = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({}, NOW, TZ), wc));
+    const ids = (k: string) => new Set(d.actions.find((a) => a.key === k)!.leads.map((l) => l.id));
+    for (const id of ids("reply_new")) for (const k of ["overdue", "due_today", "stale_new"]) expect(ids(k).has(id)).toBe(false);
   });
 
   it("a status synced today for an older lead doesn't count toward this month", async () => {

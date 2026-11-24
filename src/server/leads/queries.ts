@@ -22,6 +22,8 @@ export const listColumns = {
   ownerId: leads.ownerId,
   ownerName: users.name,
   nextFollowUpAt: leads.nextFollowUpAt,
+  proposalSentAt: leads.proposalSentAt,
+  lastContactedAt: leads.lastContactedAt,
   createdAt: leads.createdAt,
   returningInquiry: leads.returningInquiry,
   duplicateOfId: leads.duplicateOfId,

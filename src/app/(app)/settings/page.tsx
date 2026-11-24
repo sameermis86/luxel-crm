@@ -80,6 +80,8 @@ export default async function SettingsPage() {
             <N name="followUps.afterContactedDays" value={s.followUps.afterContactedDays} label="After contact (days)" w="w-28" />
             <N name="followUps.beforeConsultDays" value={s.followUps.beforeConsultDays} label="Before consult (days)" w="w-28" />
             <N name="followUps.afterProposalDays" value={s.followUps.afterProposalDays} label="After proposal (days)" w="w-28" />
+            <N name="followUps.freshInquiryDays" value={s.followUps.freshInquiryDays} label="New inquiry window (days)" w="w-28" />
+            <N name="followUps.chaseQuoteDays" value={s.followUps.chaseQuoteDays} label="Chase quotes after (days)" w="w-28" />
             <N name="followUps.newLeadNoContactHours" value={s.followUps.newLeadNoContactHours} label="New lead untouched (hrs)" w="w-28" />
             <N name="followUps.digestHour" value={s.followUps.digestHour} label="Digest hour" />
           </div>
