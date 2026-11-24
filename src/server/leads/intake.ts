@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { onCommit, type Ctx, type Tx } from "@/db/client";
-import { campaigns, followUps, intakeSubmissions, leads, type Lead, type Source } from "@/db/schema";
+import { followUps, intakeSubmissions, leads, type Lead, type Source } from "@/db/schema";
 import { resolveSource, type IntakeForm } from "@/lib/source";
 import { addBusinessHours } from "@/lib/business-hours";
 import { splitFullName } from "@/lib/normalize";
@@ -42,23 +42,7 @@ export interface IngestResult {
   matches: DuplicateMatch[];
 }
 
-/** Match utm_campaign to a campaign by key; create an unreviewed one if it's new. */
-export async function resolveCampaignId(tx: Tx, ctx: Ctx, utmCampaign: string | null | undefined): Promise<string | null> {
-  const key = utmCampaign?.trim().toLowerCase();
-  if (!key) return null;
-  const [found] = await tx.select({ id: campaigns.id }).from(campaigns).where(and(eq(campaigns.orgId, ctx.orgId), eq(campaigns.utmCampaign, key)));
-  if (found) return found.id;
-  const [created] = await tx
-    .insert(campaigns)
-    .values({ orgId: ctx.orgId, name: utmCampaign!.trim(), utmCampaign: key, channel: "other", reviewed: false })
-    .onConflictDoNothing()
-    .returning({ id: campaigns.id });
-  if (created) return created.id;
-  const [again] = await tx.select({ id: campaigns.id }).from(campaigns).where(and(eq(campaigns.orgId, ctx.orgId), eq(campaigns.utmCampaign, key)));
-  return again?.id ?? null;
-}
-
-/** Turn loose intake input into lead fields (name split, source resolution, campaign). */
+/** Turn loose intake input into lead fields (name split, source resolution). */
 export async function prepareFields(tx: Tx, ctx: Ctx, input: IngestInput, opts: Pick<IngestOptions, "form">, settings: Settings) {
   const { fullName, explicitSource, explicitChannel, ...fields } = input;
   const out: Partial<LeadFields> = { ...fields };
@@ -81,14 +65,13 @@ export async function prepareFields(tx: Tx, ctx: Ctx, input: IngestInput, opts: 
   );
   out.source = resolved.source;
   out.captureChannel = resolved.captureChannel;
-  if (!out.campaignId && out.utmCampaign) out.campaignId = await resolveCampaignId(tx, ctx, out.utmCampaign);
   return { fields: out, sourceRule: resolved.rule };
 }
 
 const FILLABLE: (keyof LeadFields)[] = [
   "firstName", "lastName", "partnerName", "email", "phone", "eventDate", "venueName", "venueCity", "guestCount",
-  "budgetMin", "budgetMax", "estimateTotal", "tierInterest", "campaignId", "utmSource", "utmMedium", "utmCampaign",
-  "utmContent", "utmTerm", "landingPage", "referrerUrl", "sourceDetail", "quoteValue", "contractValue", "collectedAmount",
+  "budgetMin", "budgetMax", "estimateTotal", "tierInterest", "utmSource", "utmMedium", "utmCampaign",
+  "utmContent", "utmTerm", "landingPage", "referrerUrl", "sourceDetail", "quoteValue",
 ];
 
 /** Only fields that are blank on the existing lead. */

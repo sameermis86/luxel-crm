@@ -79,7 +79,6 @@ export type Action =
   | "leads:merge"
   | "imports:create"
   | "imports:undo"
-  | "campaigns:manage"
   | "settings:manage"
   | "rules:manage"
   | "users:manage";
@@ -91,7 +90,6 @@ const MATRIX: Record<Action, Role[]> = {
   "leads:merge": ["owner"],
   "imports:create": ["owner", "manager"],
   "imports:undo": ["owner"],
-  "campaigns:manage": ["owner", "manager"],
   "settings:manage": ["owner"],
   "rules:manage": ["owner"],
   "users:manage": ["owner"],

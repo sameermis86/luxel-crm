@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withCtx, closeDb, type Ctx } from "@/db/client";
 import { createLead, updateLead, setFollowUp } from "@/server/leads/service";
-import { resolveCampaignId } from "@/server/leads/intake";
 import { computeDashboard } from "@/server/dashboard";
 import { listLeads } from "@/server/leads/queries";
 import { getSettings } from "@/server/settings";
@@ -20,7 +19,6 @@ beforeAll(async () => {
   const types: EventType[] = ["wedding", "corporate", "social", "wedding", "rental_only"];
   // 60 leads spread over Sep 1 – Nov 23, including boundary times around Toronto midnight
   await withCtx(env.sys, async (tx) => {
-    const camp = await resolveCampaignId(tx, env.sys, "spring-bridal-2027");
     for (let i = 0; i < 60; i++) {
       const createdAt = new Date(Date.UTC(2026, 8, 1) + i * 34 * 3600_000 + (i % 7) * 3600_000);
       const lead = await createLead(
@@ -35,7 +33,6 @@ beforeAll(async () => {
           eventDate: i % 6 === 0 ? null : `2027-${String((i % 12) + 1).padStart(2, "0")}-15`,
           budgetMax: i % 5 === 0 ? 1500 : i % 3 === 0 ? null : 4000 + i * 150,
           source: sources[i % 5],
-          campaignId: i % 4 === 1 ? camp : null,
           ownerId: i % 2 ? env.sameer.id : i % 3 ? env.mansi.id : null,
           venueCity: i % 13 === 0 ? "Ottawa" : "Toronto",
         },
@@ -45,7 +42,7 @@ beforeAll(async () => {
       if (i % 3 !== 2) await updateLead(tx, env.sys, lead.id, { status: "contacted", lastContactedAt: at(1) }, { now: at(1) });
       if (i % 4 === 0) await updateLead(tx, env.sys, lead.id, { status: "consult_held" }, { now: at(5) });
       if (i % 8 === 0) await updateLead(tx, env.sys, lead.id, { status: "proposal_sent", quoteValue: 7000 }, { now: at(8) });
-      if (i % 16 === 0) await updateLead(tx, env.sys, lead.id, { status: "won", contractValue: 7200, collectedAmount: 2000 }, { now: at(12) });
+      if (i % 16 === 0) await updateLead(tx, env.sys, lead.id, { status: "won" }, { now: at(12) });
       if (i % 8 === 4) await updateLead(tx, env.sys, lead.id, { status: "lost", lostReason: "price" }, { now: at(10) });
       if (i % 5 === 1) await setFollowUp(tx, env.sys, lead.id, { dueAt: new Date(NOW.getTime() + (i % 2 ? -1 : 1) * 86400_000) }, at(2));
     }
@@ -95,18 +92,13 @@ describe("acceptance: every dashboard number lists exactly that many records", (
           checks.push([`source ${s.source}`, s.leads, s.href]);
           checks.push([`source ${s.source} won`, s.won, s.wonHref]);
         }
-        for (const c of d.byCampaign) {
-          checks.push([`campaign ${c.name}`, c.leads, c.href]);
-          checks.push([`campaign ${c.name} qualified`, c.qualified, c.qualifiedHref]);
-          checks.push([`campaign ${c.name} won`, c.won, c.wonHref]);
-        }
         for (const f of d.funnel) checks.push([`funnel ${f.key}`, f.value, f.href]);
         for (const w of d.weekly) {
           checks.push([`week ${w.week}`, w.total, w.href]);
           for (const q of ["qualified", "needs_info", "unqualified"] as const) checks.push([`week ${w.week} ${q}`, w[q], w.hrefs[q]]);
         }
-        checks.push(["revenue won", d.revenue.wonCount, d.revenue.href]);
-        checks.push(["goal", d.revenue.goal.count, d.revenue.goal.href]);
+        checks.push(["quotes sent", d.quotes.sent.value, d.quotes.sent.href]);
+        checks.push(["quotes awaiting decision", d.quotes.awaitingDecision.value, d.quotes.awaitingDecision.href]);
 
         expect(checks.length).toBeGreaterThan(10);
         for (const [label, value, href] of checks) {
@@ -129,8 +121,9 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     expect(d.funnel.map((f) => f.value)).toEqual([...d.funnel.map((f) => f.value)].sort((a, b) => b - a)); // monotone
     expect(d.bySource.reduce((s, x) => s + x.leads, 0)).toBe(60);
     expect(d.weekly.reduce((s, w) => s + w.total, 0)).toBe(60);
-    expect(d.revenue.contract).toBe(4 * 7200);
-    expect(d.revenue.outstanding).toBe(4 * 5200);
+    // proposals sent for i % 8 === 0 (8 leads); 4 of those went on to be won
+    expect(card("quotes_sent").value).toBe(8);
+    expect(d.quotes.awaitingDecision.value).toBe(4);
   });
 
   it("'new leads this month' ignores the range filter", async () => {

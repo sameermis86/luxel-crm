@@ -72,7 +72,6 @@ export const EVENT_KINDS = [
   "returning_inquiry",
   "archived",
 ] as const;
-export const CAMPAIGN_CHANNELS = ["google_ads", "meta_ads", "instagram", "wedding_show", "email", "other"] as const;
 export const LOST_REASONS = ["price", "date_unavailable", "went_with_competitor", "no_response", "out_of_scope", "other"] as const;
 export const DUP_STATUS = ["open", "merged", "dismissed"] as const;
 export const CONFIDENCE = ["high", "medium"] as const;
@@ -85,7 +84,6 @@ export const qualificationEnum = pgEnum("qualification", QUALIFICATIONS);
 export const roleEnum = pgEnum("user_role", ROLES);
 export const actorKindEnum = pgEnum("actor_kind", ACTOR_KINDS);
 export const eventKindEnum = pgEnum("lead_event_type", EVENT_KINDS);
-export const campaignChannelEnum = pgEnum("campaign_channel", CAMPAIGN_CHANNELS);
 export const lostReasonEnum = pgEnum("lost_reason", LOST_REASONS);
 export const dupStatusEnum = pgEnum("duplicate_status", DUP_STATUS);
 export const confidenceEnum = pgEnum("match_confidence", CONFIDENCE);
@@ -138,27 +136,6 @@ export const orgSettings = pgTable("org_settings", {
   updatedAt: ts("updated_at").notNull().defaultNow(),
   updatedBy: uuid("updated_by"),
 });
-
-/* -------------------------------------------------------------------------- */
-/* Campaigns                                                                  */
-/* -------------------------------------------------------------------------- */
-
-export const campaigns = pgTable(
-  "campaigns",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id").notNull().references(() => orgs.id),
-    name: text("name").notNull(),
-    channel: campaignChannelEnum("channel").notNull().default("other"),
-    utmCampaign: text("utm_campaign"), // match key (stored lower-case)
-    startDate: date("start_date"),
-    endDate: date("end_date"),
-    spend: money("spend"),
-    reviewed: boolean("reviewed").notNull().default(true), // false = auto-created from an unknown utm_campaign
-    createdAt: ts("created_at").notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("campaigns_org_utm_uq").on(t.orgId, t.utmCampaign)],
-);
 
 /* -------------------------------------------------------------------------- */
 /* Imports                                                                    */
@@ -218,7 +195,6 @@ export const leads = pgTable(
     source: sourceEnum("source").notNull().default("other"), // origin: what brought them
     captureChannel: sourceEnum("capture_channel"), // how they reached us (form/channel)
     sourceDetail: text("source_detail"),
-    campaignId: uuid("campaign_id").references(() => campaigns.id),
     utmSource: text("utm_source"),
     utmMedium: text("utm_medium"),
     utmCampaign: text("utm_campaign"),
@@ -244,9 +220,7 @@ export const leads = pgTable(
     lastContactedAt: ts("last_contacted_at"),
     firstReplyAt: ts("first_reply_at"),
 
-    quoteValue: money("quote_value"),
-    contractValue: money("contract_value"),
-    collectedAmount: money("collected_amount"),
+    quoteValue: money("quote_value"), // value of the proposal sent (revenue itself is tracked in the proposals tool)
 
     // stage entry timestamps (first time the lead entered each stage) + furthest funnel stage
     contactedAt: ts("contacted_at"),
@@ -404,6 +378,5 @@ export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type LeadEvent = typeof leadEvents.$inferSelect;
 export type User = typeof users.$inferSelect;
-export type Campaign = typeof campaigns.$inferSelect;
 export type AssignmentRule = typeof assignmentRules.$inferSelect;
 export type FollowUp = typeof followUps.$inferSelect;

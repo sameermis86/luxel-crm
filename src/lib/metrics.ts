@@ -23,7 +23,6 @@ export const dashFilterSchema = z.object({
   range: z.enum(["this_month", "last_month", "last_30", "this_quarter", "ytd", "last_12m", "custom"]).optional().catch(undefined),
   owner: csv(z.union([z.string().uuid(), z.literal("unassigned"), z.literal("me")])).catch(undefined),
   source: csv(z.enum(SOURCES)).catch(undefined),
-  campaign: csv(z.union([z.string().uuid(), z.literal("none")])).catch(undefined),
   event_type: csv(z.enum(EVENT_TYPES)).catch(undefined),
 });
 export type DashFilter = z.infer<typeof dashFilterSchema> & { from: string; to: string };
@@ -82,7 +81,7 @@ export function dashToParams(df: DashFilter) {
     sp.set("from", df.from);
     sp.set("to", df.to);
   }
-  for (const k of ["owner", "source", "campaign", "event_type"] as const) if (df[k]?.length) sp.set(k, df[k]!.join(","));
+  for (const k of ["owner", "source", "event_type"] as const) if (df[k]?.length) sp.set(k, df[k]!.join(","));
   return sp;
 }
 
@@ -90,9 +89,9 @@ export function dashToParams(df: DashFilter) {
 /* Filters                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** The dimension filters (owner/source/campaign/event type) with no date range. */
+/** The dimension filters (owner/source/event type) with no date range. */
 export function dims(df: DashFilter): LeadFilter {
-  return { owner: df.owner, source: df.source, campaign: df.campaign, event_type: df.event_type };
+  return { owner: df.owner, source: df.source, event_type: df.event_type };
 }
 
 /** Leads created in the selected range + dimension filters. */
@@ -155,6 +154,13 @@ export function metricCards(df: DashFilter, now: Date, tz: string): Metric[] {
       definition: "As of now: open leads whose follow-up is due, new leads not contacted within 24h, or open leads with no follow-up set.",
       kind: "count",
       filter: { ...dims(df), awaiting: true },
+    },
+    {
+      key: "quotes_sent",
+      label: "Quotes sent",
+      definition: "Leads whose quote (proposal) was sent in the selected range, whenever the lead came in.",
+      kind: "count",
+      filter: { ...dims(df), quoted_from: df.from, quoted_to: df.to },
     },
     {
       key: "conversion",

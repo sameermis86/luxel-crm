@@ -7,7 +7,6 @@ export interface AssignmentConditions {
   scoreBands?: ScoreBand[];
   budgetMin?: number;
   budgetMax?: number;
-  campaignIds?: string[];
   /** case-insensitive substrings matched against source_detail and venue_name */
   venuePartners?: string[];
 }
@@ -32,7 +31,6 @@ export interface AssignmentFacts {
   eventType: EventType;
   scoreBand: ScoreBand;
   budget: number | null;
-  campaignId: string | null;
   sourceDetail: string | null;
   venueName: string | null;
 }
@@ -49,7 +47,6 @@ export function ruleMatches(c: AssignmentConditions, f: AssignmentFacts): boolea
   if (c.scoreBands?.length && !c.scoreBands.includes(f.scoreBand)) return false;
   if (c.budgetMin != null && (f.budget == null || f.budget < c.budgetMin)) return false;
   if (c.budgetMax != null && (f.budget == null || f.budget > c.budgetMax)) return false;
-  if (c.campaignIds?.length && (!f.campaignId || !c.campaignIds.includes(f.campaignId))) return false;
   if (c.venuePartners?.length) {
     const hay = `${f.sourceDetail ?? ""} ${f.venueName ?? ""}`.toLowerCase();
     if (!c.venuePartners.some((v) => v.trim() && hay.includes(v.trim().toLowerCase()))) return false;

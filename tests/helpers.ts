@@ -12,7 +12,7 @@ export async function freshOrg() {
   await sql.unsafe(`
     ALTER TABLE lead_events DISABLE TRIGGER USER;
     TRUNCATE notifications, saved_views, duplicate_candidates, follow_ups, intake_submissions, lead_events,
-             leads, import_batches, campaigns, assignment_rules, org_settings, users, orgs CASCADE;
+             leads, import_batches, integration_state, assignment_rules, org_settings, users, orgs CASCADE;
     ALTER TABLE lead_events ENABLE TRIGGER USER;`);
   await sql.end();
   const orgId = await seed(process.env.TEST_DATABASE_OWNER_URL!);

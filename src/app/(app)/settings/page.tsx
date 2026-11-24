@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { asc } from "drizzle-orm";
-import { assignmentRules, users, campaigns, EVENT_TYPES, SOURCES, ROLES } from "@/db/schema";
+import { assignmentRules, users, EVENT_TYPES, SOURCES, ROLES } from "@/db/schema";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
 import { FACTOR_LABELS, type Factor } from "@/lib/scoring";
@@ -14,10 +14,9 @@ export const dynamic = "force-dynamic";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default async function SettingsPage() {
-  const { people, rules, camps, page } = await withPage(async (tx) => ({
+  const { people, rules, page } = await withPage(async (tx) => ({
     people: await tx.select().from(users).orderBy(asc(users.name)),
     rules: await tx.select().from(assignmentRules).orderBy(asc(assignmentRules.priority)),
-    camps: await tx.select().from(campaigns).orderBy(asc(campaigns.name)),
   }));
   if (!can(page.session, "settings:manage")) redirect("/");
   const s = page.settings;
@@ -166,13 +165,6 @@ export default async function SettingsPage() {
           <p className="mt-2 text-xs text-muted">Times are {s.businessHours.timezone}. The digest schedule itself is set in the job definition (08:00).</p>
         </section>
 
-        <section className="card p-4">
-          <h2 className="text-xl">Revenue goal</h2>
-          <div className="mt-3 flex gap-4">
-            <N name="revenueGoal.amount" value={s.revenueGoal.amount} label="Goal ($)" w="w-36" />
-            <N name="revenueGoal.year" value={s.revenueGoal.year} label="Event year" w="w-24" />
-          </div>
-        </section>
       </ActionForm>
 
       {/* Users */}
@@ -227,7 +219,6 @@ export default async function SettingsPage() {
                       <Checks name="sources" label="Source" options={SOURCES.map((x) => [x, titleCase(x)])} selected={c.sources ?? []} />
                       <Checks name="eventTypes" label="Event type" options={EVENT_TYPES.map((x) => [x, titleCase(x)])} selected={c.eventTypes ?? []} />
                       <Checks name="scoreBands" label="Score band" options={[["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"]]} selected={c.scoreBands ?? []} />
-                      <Checks name="campaignIds" label="Campaign" options={camps.map((x) => [x.id, x.name])} selected={c.campaignIds ?? []} />
                       <div className="flex gap-3">
                         <label className="block"><span className="label">Budget at least</span><input name="budgetMin" defaultValue={c.budgetMin ?? ""} className="input w-28" /></label>
                         <label className="block"><span className="label">Budget at most</span><input name="budgetMax" defaultValue={c.budgetMax ?? ""} className="input w-28" /></label>

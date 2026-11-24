@@ -2,7 +2,8 @@
 
 Lead desk for **Luxel Decor & Flowers**. Every inquiry is captured (Wix Quote
 Builder, Wix contact forms, manual entry, CSV import), scored, qualified,
-assigned, followed up and tracked to revenue. Every change is recorded in an
+assigned, followed up and tracked to a sent quote and a won/lost outcome (revenue itself lives in the
+proposals tool). Every change is recorded in an
 append-only audit trail.
 
 Stack (matches StemLedger so the two can merge): Next.js 15 App Router + TypeScript,

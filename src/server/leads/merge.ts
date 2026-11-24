@@ -7,8 +7,8 @@ import { LeadError, updateLead, writeEvents, syncNextFollowUp, leadFieldsSchema,
 export const MERGE_FIELDS = [
   "firstName", "lastName", "partnerName", "email", "phone", "eventType", "eventDate", "venueName", "venueCity", "guestCount",
   "budgetMin", "budgetMax", "estimateTotal", "servicesRequested", "tierInterest", "message", "source", "captureChannel",
-  "sourceDetail", "campaignId", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "landingPage", "referrerUrl",
-  "ownerId", "quoteValue", "contractValue", "collectedAmount",
+  "sourceDetail", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "landingPage", "referrerUrl",
+  "ownerId", "quoteValue",
 ] as const;
 export type MergeField = (typeof MERGE_FIELDS)[number];
 export type MergeChoices = Partial<Record<MergeField, "survivor" | "merged">>;

@@ -28,7 +28,6 @@ export const leadFilterSchema = z.object({
   status: csv(z.enum(STATUSES)).catch(undefined),
   qualification: csv(z.enum(QUALIFICATIONS)).catch(undefined),
   source: csv(z.enum(SOURCES)).catch(undefined),
-  campaign: csv(z.union([z.string().uuid(), z.literal("none")])).catch(undefined),
   event_type: csv(z.enum(EVENT_TYPES)).catch(undefined),
   owner: csv(z.union([z.string().uuid(), z.literal("unassigned"), z.literal("me")])).catch(undefined),
   band: csv(z.enum(["hot", "warm", "cold"])).catch(undefined),
@@ -36,6 +35,9 @@ export const leadFilterSchema = z.object({
   created_to: isoDate.optional().catch(undefined),
   won_from: isoDate.optional().catch(undefined),
   won_to: isoDate.optional().catch(undefined),
+  /** quote (proposal) sent within the range */
+  quoted_from: isoDate.optional().catch(undefined),
+  quoted_to: isoDate.optional().catch(undefined),
   /** won or lost within the range ("decided") */
   closed_from: isoDate.optional().catch(undefined),
   closed_to: isoDate.optional().catch(undefined),
@@ -166,10 +168,6 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.qualification?.length) c.push(inArray(leads.qualification, f.qualification));
   if (f.source?.length) c.push(inArray(leads.source, f.source));
   if (f.event_type?.length) c.push(inArray(leads.eventType, f.event_type));
-  if (f.campaign?.length) {
-    const ids = f.campaign.filter((x) => x !== "none");
-    c.push(or(ids.length ? inArray(leads.campaignId, ids) : undefined, f.campaign.includes("none") ? isNull(leads.campaignId) : undefined));
-  }
   if (f.owner?.length) {
     const ids = f.owner.map((o) => (o === "me" ? wc.userId : o)).filter((o): o is string => !!o && o !== "unassigned");
     c.push(or(ids.length ? inArray(leads.ownerId, ids) : undefined, f.owner.includes("unassigned") ? isNull(leads.ownerId) : undefined));
@@ -188,6 +186,8 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.created_to) c.push(lt(leads.createdAt, endOfDayExclusiveInTz(f.created_to, tz)));
   if (f.won_from) c.push(gte(leads.wonAt, startOfDayInTz(f.won_from, tz)));
   if (f.won_to) c.push(lt(leads.wonAt, endOfDayExclusiveInTz(f.won_to, tz)));
+  if (f.quoted_from) c.push(gte(leads.proposalSentAt, startOfDayInTz(f.quoted_from, tz)));
+  if (f.quoted_to) c.push(lt(leads.proposalSentAt, endOfDayExclusiveInTz(f.quoted_to, tz)));
   if (f.closed_from || f.closed_to) {
     const closedAt = sql`coalesce(${leads.wonAt}, ${leads.lostAt})`;
     c.push(inArray(leads.status, ["won", "lost"]));
@@ -229,6 +229,7 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.event_type) out.push(f.event_type.map(h).join(", "));
   if (f.band) out.push(f.band.join(", "));
   if (f.created_from || f.created_to) out.push(`created ${f.created_from ?? "…"} → ${f.created_to ?? "…"}`);
+  if (f.quoted_from || f.quoted_to) out.push(`quote sent ${f.quoted_from ?? "…"} → ${f.quoted_to ?? "…"}`);
   if (f.closed_from || f.closed_to) out.push(`won or lost ${f.closed_from ?? "…"} → ${f.closed_to ?? "…"}`);
   if (f.won_from || f.won_to) out.push(`won ${f.won_from ?? "…"} → ${f.won_to ?? "…"}`);
   if (f.event_year) out.push(`events in ${f.event_year}`);

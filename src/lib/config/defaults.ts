@@ -73,7 +73,6 @@ export const settingsSchema = z.object({
   followUps: followUpSchema,
   utmRules: z.array(utmRuleSchema),
   referrerRules: z.array(z.object({ domain: z.string(), result: z.enum(SOURCES) })),
-  revenueGoal: z.object({ amount: z.number(), year: z.number() }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -187,7 +186,6 @@ export const DEFAULT_SETTINGS: Settings = {
     { domain: "m.facebook.com", result: "facebook" },
     { domain: "l.facebook.com", result: "facebook" },
   ],
-  revenueGoal: { amount: 1_100_000, year: 2027 },
 };
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends (infer U)[] ? U[] : T[K] extends object ? DeepPartial<T[K]> : T[K] };

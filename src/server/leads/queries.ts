@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Tx } from "@/db/client";
-import { campaigns, duplicateCandidates, followUps, leadEvents, leads, users, notifications } from "@/db/schema";
+import { duplicateCandidates, followUps, leadEvents, leads, users, notifications } from "@/db/schema";
 import { leadWhere, SORTABLE, type LeadFilter, type ListParams, type WhereContext } from "@/lib/lead-filters";
 
 export const listColumns = {
@@ -17,8 +17,6 @@ export const listColumns = {
   venueName: leads.venueName,
   source: leads.source,
   captureChannel: leads.captureChannel,
-  campaignId: leads.campaignId,
-  campaignName: campaigns.name,
   score: leads.score,
   qualification: leads.qualification,
   status: leads.status,
@@ -29,8 +27,6 @@ export const listColumns = {
   returningInquiry: leads.returningInquiry,
   duplicateOfId: leads.duplicateOfId,
   quoteValue: leads.quoteValue,
-  contractValue: leads.contractValue,
-  collectedAmount: leads.collectedAmount,
   budgetMin: leads.budgetMin,
   budgetMax: leads.budgetMax,
   guestCount: leads.guestCount,
@@ -54,7 +50,6 @@ export async function listLeads(tx: Tx, filter: LeadFilter, wc: WhereContext, p:
       .select(listColumns)
       .from(leads)
       .leftJoin(users, eq(users.id, leads.ownerId))
-      .leftJoin(campaigns, eq(campaigns.id, leads.campaignId))
       .where(where)
       .orderBy(order, desc(leads.recordId))
       .limit(p.per)
@@ -70,7 +65,6 @@ export async function allMatchingLeads(tx: Tx, filter: LeadFilter, wc: WhereCont
     .select(listColumns)
     .from(leads)
     .leftJoin(users, eq(users.id, leads.ownerId))
-    .leftJoin(campaigns, eq(campaigns.id, leads.campaignId))
     .where(leadWhere(filter, wc))
     .orderBy(desc(leads.createdAt))
     .limit(cap);
@@ -80,7 +74,6 @@ export async function getLeadDetail(tx: Tx, leadId: string) {
   const [lead] = await tx.select().from(leads).where(eq(leads.id, leadId));
   if (!lead) return null;
   const owner = lead.ownerId ? (await tx.select().from(users).where(eq(users.id, lead.ownerId)))[0] ?? null : null;
-  const campaign = lead.campaignId ? (await tx.select().from(campaigns).where(eq(campaigns.id, lead.campaignId)))[0] ?? null : null;
   const mergedInto = lead.duplicateOfId
     ? (await tx.select({ id: leads.id, recordId: leads.recordId }).from(leads).where(eq(leads.id, lead.duplicateOfId)))[0] ?? null
     : null;
@@ -105,7 +98,7 @@ export async function getLeadDetail(tx: Tx, leadId: string) {
     .innerJoin(other, or(and(eq(duplicateCandidates.leadA, lead.id), eq(other.id, duplicateCandidates.leadB)), and(eq(duplicateCandidates.leadB, lead.id), eq(other.id, duplicateCandidates.leadA))))
     .where(and(eq(duplicateCandidates.status, "open"), isNull(other.duplicateOfId)));
 
-  return { lead, owner, campaign, mergedInto, mergedChildren, followUps: fus, duplicates: dups };
+  return { lead, owner, mergedInto, mergedChildren, followUps: fus, duplicates: dups };
 }
 
 export type TimelineFilter = "all" | "activities" | "changes";
@@ -138,9 +131,6 @@ export async function listUsers(tx: Tx) {
   return tx.select().from(users).orderBy(asc(users.name));
 }
 
-export async function listCampaigns(tx: Tx) {
-  return tx.select().from(campaigns).orderBy(asc(campaigns.name));
-}
 
 export async function unreadNotifications(tx: Tx, userId: string) {
   return tx

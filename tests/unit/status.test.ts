@@ -17,10 +17,9 @@ describe("status transitions", () => {
     expect(canTransition("unqualified", "won")).toBe(false);
   });
   it("no-op transition is not allowed", () => expect(canTransition("new", "new")).toBe(false));
-  it("won requires contract value, lost requires a reason, unqualified requires a reason", () => {
-    expect(transitionRequirements("won")).toEqual(["contractValue"]);
-    expect(validateTransition("proposal_sent", "won", {})).toEqual({ ok: false, error: "Contract value is required to mark a lead won" });
-    expect(validateTransition("proposal_sent", "won", { contractValue: 8500 })).toEqual({ ok: true });
+  it("won needs nothing extra (revenue lives in the proposals tool); lost and unqualified need a reason", () => {
+    expect(transitionRequirements("won")).toEqual([]);
+    expect(validateTransition("proposal_sent", "won", {})).toEqual({ ok: true });
     expect(validateTransition("contacted", "lost", {}).ok).toBe(false);
     expect(validateTransition("contacted", "lost", { lostReason: "price" }).ok).toBe(true);
     expect(validateTransition("new", "unqualified", { unqualifiedReason: "" }).ok).toBe(false);

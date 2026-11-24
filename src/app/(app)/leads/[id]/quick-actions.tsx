@@ -179,8 +179,8 @@ function StatusForm(props: { leadId: string; allowed: { value: Status; label: st
       </label>
       {to === "won" && (
         <label className="block">
-          <span className="label">Contract value (required)</span>
-          <input name="contractValue" className="input" inputMode="decimal" defaultValue={props.quoteValue ?? ""} required />
+          <span className="label">Quote value (optional)</span>
+          <input name="quoteValue" className="input" inputMode="decimal" defaultValue={props.quoteValue ?? ""} />
         </label>
       )}
       {to === "proposal_sent" && (

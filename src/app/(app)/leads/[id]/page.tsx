@@ -29,14 +29,13 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   });
   if (!data.detail) notFound();
   const { detail, timeline, users, page } = data;
-  const { lead, owner, campaign, mergedInto, mergedChildren, followUps, duplicates } = detail;
+  const { lead, owner, mergedInto, mergedChildren, followUps, duplicates } = detail;
   const band = scoreBand(lead.score, page.settings.scoring);
   const readOnly = !!lead.duplicateOfId || !!lead.archivedAt;
   const breakdown = lead.scoreBreakdown as ScoreBreakdown;
   const openFollowUps = followUps.filter((f) => !f.f.doneAt);
   const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified"].includes(lead.status);
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
-  const balance = lead.contractValue != null ? lead.contractValue - (lead.collectedAmount ?? 0) : null;
 
   return (
     <div className="space-y-4">
@@ -165,8 +164,8 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
               id: lead.id, firstName: lead.firstName, lastName: lead.lastName, partnerName: lead.partnerName, email: lead.email, phone: lead.phone,
               eventType: lead.eventType, eventDate: lead.eventDate, venueName: lead.venueName, venueCity: lead.venueCity, guestCount: lead.guestCount,
               budgetMin: lead.budgetMin, budgetMax: lead.budgetMax, estimateTotal: lead.estimateTotal, tierInterest: lead.tierInterest,
-              services: lead.servicesRequested.join(", "), message: lead.message, quoteValue: lead.quoteValue, contractValue: lead.contractValue,
-              collectedAmount: lead.collectedAmount, source: lead.source, sourceDetail: lead.sourceDetail,
+              services: lead.servicesRequested.join(", "), message: lead.message, quoteValue: lead.quoteValue,
+              source: lead.source, sourceDetail: lead.sourceDetail,
             }}
           />
 
@@ -176,8 +175,6 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
               <dt className="text-muted">Origin</dt><dd>{titleCase(lead.source)}</dd>
               <dt className="text-muted">Channel</dt><dd>{titleCase(lead.captureChannel)}</dd>
               {lead.sourceDetail && <><dt className="text-muted">Detail</dt><dd>{lead.sourceDetail}</dd></>}
-              <dt className="text-muted">Campaign</dt>
-              <dd>{campaign ? <>{campaign.name}{!campaign.reviewed && <span className="chip ml-1 border-amber/40 text-amber">unreviewed</span>}</> : "—"}</dd>
               {(["utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm"] as const).map((k) =>
                 lead[k] ? <Row key={k} k={k.replace("utm", "utm_").toLowerCase()} v={lead[k]} /> : null,
               )}
@@ -187,12 +184,10 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           </section>
 
           <section className="card p-4 text-sm">
-            <h2 className="mb-2 text-lg">Financials</h2>
+            <h2 className="mb-2 text-lg">Quote</h2>
             <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-1 tabular">
-              <dt className="text-muted">Quote</dt><dd>{fmtMoney(lead.quoteValue)}</dd>
-              <dt className="text-muted">Contract</dt><dd>{fmtMoney(lead.contractValue)}</dd>
-              <dt className="text-muted">Collected</dt><dd>{fmtMoney(lead.collectedAmount)}</dd>
-              <dt className="text-muted">Balance</dt><dd>{fmtMoney(balance)}</dd>
+              <dt className="text-muted">Quote sent</dt><dd>{lead.proposalSentAt ? fmtDateTime(lead.proposalSentAt) : "not yet"}</dd>
+              <dt className="text-muted">Quote value</dt><dd>{fmtMoney(lead.quoteValue)}</dd>
               {lead.wonAt && <><dt className="text-muted">Won</dt><dd>{fmtDateTime(lead.wonAt)}</dd></>}
             </dl>
           </section>

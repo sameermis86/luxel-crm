@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { withPage } from "@/server/page";
 import { computeDashboard } from "@/server/dashboard";
-import { listCampaigns, listUsers } from "@/server/leads/queries";
+import { listUsers } from "@/server/leads/queries";
 import { parseDashFilter, RANGE_LABELS } from "@/lib/metrics";
-import { fmtDate, fmtMoney, fmtMoneyShort, titleCase } from "@/lib/format";
+import { fmtDate, titleCase } from "@/lib/format";
 import { SOURCES, EVENT_TYPES } from "@/db/schema";
 import { SourceChart, WeeklyChart } from "@/components/dashboard-charts";
 import { C } from "@/lib/chart-colors";
@@ -16,12 +16,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   const sp = await searchParams;
   const data = await withPage(async (tx, p) => {
     const df = parseDashFilter(sp, p.now, p.settings.businessHours.timezone);
-    const [d, users, campaigns] = await Promise.all([computeDashboard(tx, df, p.wc), listUsers(tx), listCampaigns(tx)]);
-    return { df, d, users, campaigns };
+    const [d, users] = await Promise.all([computeDashboard(tx, df, p.wc), listUsers(tx)]);
+    return { df, d, users };
   });
-  const { df, d, users, campaigns } = data;
+  const { df, d, users } = data;
   const one = (v?: string[]) => (v?.length === 1 ? v[0] : "");
-  const goalPct = Math.min(100, (d.revenue.goal.booked / d.revenue.goal.amount) * 100);
   const funnelMax = Math.max(1, d.funnel[0]?.value ?? 1);
   const days = (n: number | null | undefined) => (n == null ? "—" : `${Number(n).toFixed(1)} d`);
   const conversion = d.cards.find((c) => c.key === "conversion")!;
@@ -48,7 +47,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         <label className="block"><span className="label">To</span><input type="date" name="to" defaultValue={df.to} className="input" /></label>
         <Sel name="owner" label="Owner" value={one(df.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
         <Sel name="source" label="Source" value={one(df.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
-        <Sel name="campaign" label="Campaign" value={one(df.campaign)} options={[["none", "No campaign"], ...campaigns.map((c) => [c.id, c.name] as [string, string])]} />
         <Sel name="event_type" label="Event type" value={one(df.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
         <button className="btn-primary">Apply</button>
         <Link href="/" className="btn-ghost">Reset</Link>
@@ -56,7 +54,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
       </form>
 
       {/* Metric cards */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Key metrics">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" aria-label="Key metrics">
         {d.cards.map((c) => (
           <Link key={c.key} href={c.href} className="card group block p-4 transition-colors hover:border-ink/40" title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value}>
             <div className="text-xs tracking-wide text-muted uppercase">{c.label}</div>
@@ -141,73 +139,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         />
       </section>
 
-      <section className="card overflow-x-auto">
-        <div className="flex items-center justify-between px-4 pt-4">
-          <h2 className="text-xl">Leads by campaign</h2>
-          <Link href="/campaigns" className="text-sm underline">Manage campaigns</Link>
-        </div>
-        <table className="mt-2 w-full min-w-[760px]">
-          <thead className="border-y border-edge bg-paper/60">
-            <tr>
-              <th className="th">Campaign</th>
-              <th className="th text-right">Leads</th>
-              <th className="th text-right">Qualified</th>
-              <th className="th text-right">Won</th>
-              <th className="th text-right">Conversion</th>
-              <th className="th text-right">Revenue</th>
-              <th className="th text-right">Spend</th>
-              <th className="th text-right">Cost / lead</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-edge">
-            {d.byCampaign.length === 0 && <tr><td colSpan={8} className="td py-6 text-center text-muted">No leads in this range.</td></tr>}
-            {d.byCampaign.map((c) => (
-              <tr key={c.campaignId ?? "none"} className="hover:bg-paper/50">
-                <td className="td">
-                  <Link href={c.href} className="hover:underline">{c.name}</Link>
-                  {!c.reviewed && <span className="chip ml-2 border-amber/40 text-amber">unreviewed</span>}
-                </td>
-                <td className="td text-right tabular"><Link className="underline" href={c.href}>{c.leads}</Link></td>
-                <td className="td text-right tabular"><Link className="underline" href={c.qualifiedHref}>{c.qualified}</Link></td>
-                <td className="td text-right tabular"><Link className="underline" href={c.wonHref}>{c.won}</Link></td>
-                <td className="td text-right tabular">{c.leads ? `${c.conversion.toFixed(1)}%` : "—"}</td>
-                <td className="td text-right tabular">{fmtMoney(c.revenue)}</td>
-                <td className="td text-right tabular">{c.spend != null ? fmtMoney(c.spend) : "—"}</td>
-                <td className="td text-right tabular">{c.costPerLead != null ? fmtMoney(c.costPerLead) : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[2fr_3fr]">
-        <div className="card p-4">
-          <h2 className="text-xl">Revenue won in range</h2>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-            <Big k="Contract value" v={fmtMoney(d.revenue.contract)} href={d.revenue.href} />
-            <Big k="Bookings" v={String(d.revenue.wonCount)} href={d.revenue.href} />
-            <Big k="Collected" v={fmtMoney(d.revenue.collected)} />
-            <Big k="Outstanding" v={fmtMoney(d.revenue.outstanding)} />
-            <Big k="Average booking" v={fmtMoney(d.revenue.avgBooking)} />
-          </dl>
-        </div>
-        <div className="card p-4">
-          <h2 className="text-xl">Progress to {fmtMoneyShort(d.revenue.goal.amount)} · {d.revenue.goal.year} events</h2>
-          <p className="text-xs text-muted">Contract value of won leads whose event date is in {d.revenue.goal.year} (not affected by the filters above).</p>
-          <Link href={d.revenue.goal.href} className="mt-4 block" aria-label={`${fmtMoney(d.revenue.goal.booked)} booked of ${fmtMoney(d.revenue.goal.amount)}`}>
-            <div className="flex items-baseline justify-between">
-              <span className="font-display text-3xl tabular">{fmtMoney(d.revenue.goal.booked)}</span>
-              <span className="text-sm text-muted tabular">{goalPct.toFixed(1)}% · {d.revenue.goal.count} bookings</span>
-            </div>
-            <div className="mt-2 h-3 rounded-full bg-paper">
-              <div className="h-3 rounded-full" style={{ width: `${Math.max(1, goalPct)}%`, background: C.won }} />
-            </div>
-            <div className="mt-1 flex justify-between text-xs text-muted tabular">
-              <span>Collected {fmtMoney(d.revenue.goal.collected)}</span>
-              <span>{fmtMoney(Math.max(0, d.revenue.goal.amount - d.revenue.goal.booked))} to go</span>
-            </div>
-          </Link>
-        </div>
+      <section className="card p-4">
+        <h2 className="text-xl">Quotes</h2>
+        <p className="text-xs text-muted">Quotes go out from the proposals tool; mark a lead “Proposal sent” here to track it. Revenue is tracked in the proposals tool.</p>
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+          <Big k="Quotes sent in range" v={String(d.quotes.sent.value)} href={d.quotes.sent.href} />
+          <Big k="Awaiting client decision" v={String(d.quotes.awaitingDecision.value)} href={d.quotes.awaitingDecision.href} />
+          <Big k="Quote → won (median)" v={days(d.stages.toWon)} />
+        </dl>
       </section>
     </div>
   );

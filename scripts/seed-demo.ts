@@ -95,7 +95,7 @@ async function main() {
       const closeAt = new Date(Math.min(t, now.getTime() - 3600000));
       if (steps.includes("proposal_sent") && rand() < 0.62) {
         const value = Math.round(((budget ?? 7000) * (0.85 + rand() * 0.4)) / 50) * 50;
-        await updateLead(tx, sys, lead.id, { status: "won", contractValue: value, collectedAmount: Math.round(value * (rand() < 0.5 ? 0.3 : 1)) }, { now: closeAt });
+        await updateLead(tx, sys, lead.id, { status: "won", quoteValue: value }, { now: closeAt });
       } else if (steps.length && daysAgo > 30 && rand() < 0.45) {
         await updateLead(tx, sys, lead.id, { status: "lost", lostReason: pick(["price", "date_unavailable", "went_with_competitor", "no_response"] as LostReason[]) }, { now: closeAt });
       } else if (lead.qualification === "unqualified" && rand() < 0.6) {

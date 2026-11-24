@@ -51,7 +51,6 @@ export const leadFieldsSchema = z.object({
   source: z.enum(SOURCES),
   captureChannel: z.enum(SOURCES).nullable(),
   sourceDetail: z.string().trim().max(300).nullable(),
-  campaignId: z.string().uuid().nullable(),
   utmSource: z.string().max(200).nullable(),
   utmMedium: z.string().max(200).nullable(),
   utmCampaign: z.string().max(200).nullable(),
@@ -68,8 +67,6 @@ export const leadFieldsSchema = z.object({
   lastContactedAt: z.date().nullable(),
   firstReplyAt: z.date().nullable(),
   quoteValue: money.nullable(),
-  contractValue: money.nullable(),
-  collectedAmount: money.nullable(),
 });
 export type LeadFields = z.infer<typeof leadFieldsSchema>;
 export const leadPatchSchema = leadFieldsSchema.partial();
@@ -214,7 +211,6 @@ export async function createLead(tx: Tx, ctx: Ctx, input: Partial<LeadFields>, o
   // stage timestamps for leads that arrive mid-funnel (imports)
   const stageAt = opts.createdAt ?? now;
   applyStageEntry(row, status, stageAt);
-  if (status === "won" && fields.contractValue == null && fields.quoteValue != null) row.contractValue = fields.quoteValue;
 
   const sq = computeScoreAndQualification(row as any, settings, now);
   row.score = sq.score;
@@ -313,7 +309,6 @@ export async function updateLead(
   // Status first: validate + side effects
   if (fields.status && fields.status !== current.status) {
     const v = validateTransition(current.status, fields.status, {
-      contractValue: fields.contractValue ?? current.contractValue,
       lostReason: fields.lostReason ?? current.lostReason,
       unqualifiedReason: fields.unqualifiedReason ?? current.unqualifiedReason,
     });
@@ -389,7 +384,7 @@ export async function updateLead(
   }));
   if (changes.some((c) => c.field === "status" && c.new === "won")) {
     const days = Math.round((now.getTime() - current.createdAt.getTime()) / 86_400_000);
-    events.push({ at: opts.now, type: "converted", newValue: serialize(saved.contractValue), payload: { contractValue: saved.contractValue, daysToConvert: days } });
+    events.push({ at: opts.now, type: "converted", payload: { daysToConvert: days, quoteValue: saved.quoteValue } });
   }
   await writeEvents(tx, ctx, leadId, events);
 

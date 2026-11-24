@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { campaigns, leads, type Qualification, type Source } from "@/db/schema";
+import { leads, type Qualification, type Source } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type WhereContext } from "@/lib/lead-filters";
 import { base, conversionDetail, dims, FUNNEL, metricCards, type DashFilter, type Metric } from "@/lib/metrics";
 import { addDaysToDate } from "@/lib/dates";
@@ -36,7 +36,6 @@ async function evalMetric(tx: Tx, m: Metric, wc: WhereContext): Promise<CardValu
   };
 }
 
-const num = (v: unknown) => (v == null ? 0 : Number(v));
 
 export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext) {
   const tz = wc.settings.businessHours.timezone;
@@ -56,43 +55,6 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
   const bySource = srcRows.map((r) => {
     const f: LeadFilter = { ...b, source: [r.source as Source] };
     return { source: r.source, leads: r.n, won: r.won, href: leadsHref(f), wonHref: leadsHref({ ...f, status: ["won"] }) };
-  });
-
-  // Leads by campaign
-  const campRows = await tx
-    .select({
-      campaignId: leads.campaignId,
-      name: campaigns.name,
-      spend: campaigns.spend,
-      reviewed: campaigns.reviewed,
-      n: sql<number>`count(*)::int`,
-      qualified: sql<number>`count(*) filter (where ${leads.qualification} = 'qualified')::int`,
-      won: sql<number>`count(*) filter (where ${leads.status} = 'won')::int`,
-      revenue: sql<number>`coalesce(sum(${leads.contractValue}) filter (where ${leads.status} = 'won'), 0)::float`,
-    })
-    .from(leads)
-    .leftJoin(campaigns, eq(campaigns.id, leads.campaignId))
-    .where(bWhere)
-    .groupBy(leads.campaignId, campaigns.name, campaigns.spend, campaigns.reviewed)
-    .orderBy(sql`count(*) desc`);
-  const byCampaign = campRows.map((r) => {
-    const f: LeadFilter = { ...b, campaign: [r.campaignId ?? "none"] };
-    const spend = r.spend == null ? null : num(r.spend);
-    return {
-      campaignId: r.campaignId,
-      name: r.name ?? "No campaign",
-      reviewed: r.reviewed ?? true,
-      leads: r.n,
-      qualified: r.qualified,
-      won: r.won,
-      conversion: r.n ? (r.won / r.n) * 100 : 0,
-      revenue: num(r.revenue),
-      spend,
-      costPerLead: spend != null && r.n ? spend / r.n : null,
-      href: leadsHref(f),
-      qualifiedHref: leadsHref({ ...f, qualification: ["qualified"] }),
-      wonHref: leadsHref({ ...f, status: ["won"] }),
-    };
   });
 
   // Funnel
@@ -139,32 +101,13 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     };
   });
 
-  // Revenue (won in range)
-  const wonInRange: LeadFilter = { ...dims(df), status: ["won"], won_from: df.from, won_to: df.to };
-  const [rev] = await tx
-    .select({
-      n: sql<number>`count(*)::int`,
-      contract: sql<number>`coalesce(sum(${leads.contractValue}), 0)::float`,
-      collected: sql<number>`coalesce(sum(${leads.collectedAmount}), 0)::float`,
-    })
-    .from(leads)
-    .where(leadWhere(wonInRange, wc));
-  const goal = wc.settings as unknown as { revenueGoal?: { amount: number; year: number } };
-  const goalYear = (goal.revenueGoal?.year ?? new Date().getFullYear()) as number;
-  const goalAmount = goal.revenueGoal?.amount ?? 1_100_000;
-  const goalFilter: LeadFilter = { status: ["won"], event_year: goalYear };
-  const [g] = await tx
-    .select({ booked: sql<number>`coalesce(sum(${leads.contractValue}), 0)::float`, n: sql<number>`count(*)::int`, collected: sql<number>`coalesce(sum(${leads.collectedAmount}), 0)::float` })
-    .from(leads)
-    .where(leadWhere(goalFilter, wc));
-  const revenue = {
-    wonCount: rev.n,
-    contract: num(rev.contract),
-    collected: num(rev.collected),
-    outstanding: num(rev.contract) - num(rev.collected),
-    avgBooking: rev.n ? num(rev.contract) / rev.n : 0,
-    href: leadsHref(wonInRange),
-    goal: { year: goalYear, amount: goalAmount, booked: num(g.booked), collected: num(g.collected), count: g.n, href: leadsHref(goalFilter) },
+  // Quotes (revenue itself is tracked in the proposals tool)
+  const quotedInRange: LeadFilter = { ...dims(df), quoted_from: df.from, quoted_to: df.to };
+  const awaitingDecision: LeadFilter = { ...dims(df), status: ["proposal_sent"] };
+  const [sentCount, awaitingCount] = await Promise.all([countLeads(tx, quotedInRange, wc), countLeads(tx, awaitingDecision, wc)]);
+  const quotes = {
+    sent: { value: sentCount, href: leadsHref(quotedInRange) },
+    awaitingDecision: { value: awaitingCount, href: leadsHref(awaitingDecision) },
   };
 
   // Median days per stage (leads created in range)
@@ -181,7 +124,7 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     .from(leads)
     .where(bWhere);
 
-  return { cards, detail, bySource, byCampaign, funnel, weekly, revenue, stages };
+  return { cards, detail, bySource, funnel, weekly, quotes, stages };
 }
 
 export type Dashboard = Awaited<ReturnType<typeof computeDashboard>>;

@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
       budget_max: r.budgetMax,
       source: r.source,
       capture_channel: r.captureChannel,
-      campaign: r.campaignName,
       utm_campaign: r.utmCampaign,
       score: r.score,
       qualification: r.qualification,
@@ -41,8 +40,6 @@ export async function GET(req: NextRequest) {
       owner: r.ownerName,
       next_follow_up_at: r.nextFollowUpAt?.toISOString() ?? "",
       quote_value: r.quoteValue,
-      contract_value: r.contractValue,
-      collected: r.collectedAmount,
       created_at: r.createdAt.toISOString(),
     })),
   );

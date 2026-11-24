@@ -18,7 +18,6 @@ export interface Row {
   eventType: EventType;
   eventDate: string | null;
   source: Source;
-  campaignName: string | null;
   score: number;
   qualification: Qualification;
   status: Status;
@@ -33,7 +32,6 @@ const COLS: { key: string; label: string; sort?: string }[] = [
   { key: "name", label: "Name", sort: "name" },
   { key: "event_date", label: "Event", sort: "event_date" },
   { key: "source", label: "Source", sort: "source" },
-  { key: "campaign", label: "Campaign" },
   { key: "score", label: "Score", sort: "score" },
   { key: "qualification", label: "Qualification", sort: "qualification" },
   { key: "status", label: "Status", sort: "status" },
@@ -150,7 +148,6 @@ export function LeadsTable(props: {
                     <div className="text-xs text-muted">{titleCase(r.eventType)}</div>
                   </td>
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
-                  <td className="td max-w-[180px] truncate text-muted">{r.campaignName ?? "—"}</td>
                   <td className="td"><ScoreBadge score={r.score} band={band(r.score)} /></td>
                   <td className="td"><QualBadge q={r.qualification} /></td>
                   <td className="td"><StatusPill status={r.status} /></td>

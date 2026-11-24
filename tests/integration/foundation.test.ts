@@ -89,9 +89,8 @@ describe("updateLead", () => {
 
   it("validates status transitions and requirements", async () => {
     const lead = await withCtx(env.sys, (tx) => createLead(tx, env.sys, baseLead));
-    await expect(withCtx(env.sys, (tx) => updateLead(tx, env.sys, lead.id, { status: "won" }))).rejects.toThrow(/Contract value/);
     await expect(withCtx(env.sys, (tx) => updateLead(tx, env.sys, lead.id, { status: "lost" }))).rejects.toThrow(/lost reason/);
-    const { lead: won } = await withCtx(env.sys, (tx) => updateLead(tx, env.sys, lead.id, { status: "won", contractValue: 9500 }));
+    const { lead: won } = await withCtx(env.sys, (tx) => updateLead(tx, env.sys, lead.id, { status: "won" }));
     expect(won.wonAt).toBeTruthy();
     expect(won.furthestStage).toBe(5);
     expect(won.contactedAt).toBeTruthy();

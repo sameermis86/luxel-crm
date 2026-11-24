@@ -55,24 +55,20 @@ export function canTransition(from: Status, to: Status): boolean {
   return from !== to && TRANSITIONS[from].includes(to);
 }
 
-export type TransitionField = "contractValue" | "lostReason" | "unqualifiedReason";
+export type TransitionField = "lostReason" | "unqualifiedReason";
 export function transitionRequirements(to: Status): TransitionField[] {
-  if (to === "won") return ["contractValue"];
   if (to === "lost") return ["lostReason"];
   if (to === "unqualified") return ["unqualifiedReason"];
   return [];
 }
 
 export interface TransitionExtras {
-  contractValue?: number | null;
   lostReason?: LostReason | null;
   unqualifiedReason?: string | null;
 }
 
 export function validateTransition(from: Status, to: Status, extras: TransitionExtras): { ok: true } | { ok: false; error: string } {
   if (!canTransition(from, to)) return { ok: false, error: `Can't move a lead from ${STATUS_LABELS[from]} to ${STATUS_LABELS[to]}` };
-  if (to === "won" && !(extras.contractValue != null && extras.contractValue > 0))
-    return { ok: false, error: "Contract value is required to mark a lead won" };
   if (to === "lost" && !extras.lostReason) return { ok: false, error: "A lost reason is required" };
   if (to === "unqualified" && !extras.unqualifiedReason?.trim()) return { ok: false, error: "An unqualified reason is required" };
   return { ok: true };

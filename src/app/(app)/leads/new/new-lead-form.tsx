@@ -133,7 +133,6 @@ export function NewLeadForm() {
           </select>
         </Field>
         <Field label="Detail (referrer, venue partner, show)"><input name="sourceDetail" className="input" /></Field>
-        <Field label="Campaign key (optional)"><input name="utmCampaign" className="input" placeholder="e.g. spring-bridal-show-2027" /></Field>
       </section>
 
       <div className="flex items-center gap-3">

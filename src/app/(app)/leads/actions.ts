@@ -141,7 +141,7 @@ export async function updateLeadFieldsAction(leadId: string, _: ActionResult | n
     if (fd.has("eventDate")) patch.eventDate = nullable(fd, "eventDate");
     if (fd.has("source")) patch.source = z.enum(SOURCES).parse(str(fd, "source"));
     if (fd.has("tierInterest")) patch.tierInterest = z.enum(TIERS).nullable().parse(nullable(fd, "tierInterest"));
-    for (const k of ["guestCount", "budgetMin", "budgetMax", "estimateTotal", "quoteValue", "contractValue", "collectedAmount"]) {
+    for (const k of ["guestCount", "budgetMin", "budgetMax", "estimateTotal", "quoteValue"]) {
       if (fd.has(k)) patch[k] = num(fd, k);
     }
     if (fd.has("services")) patch.servicesRequested = String(fd.get("services")).split(",").map((s) => s.trim()).filter(Boolean);
@@ -159,7 +159,7 @@ export async function changeStatusAction(leadId: string, _: ActionResult | null,
     authorize(session, "leads:write");
     const status = z.enum(STATUSES).parse(str(fd, "status"));
     const patch: Record<string, unknown> = { status };
-    if (status === "won") patch.contractValue = num(fd, "contractValue");
+    if (status === "won" && fd.has("quoteValue")) patch.quoteValue = num(fd, "quoteValue");
     if (status === "lost") {
       patch.lostReason = z.enum(LOST_REASONS).nullable().parse(nullable(fd, "lostReason") ?? null);
       patch.lostReasonDetail = nullable(fd, "lostReasonDetail") ?? null;

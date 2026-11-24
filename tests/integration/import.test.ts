@@ -17,7 +17,7 @@ const tracker = [
   { client: "Noor Haddad", lead_date: "2026-05-20", event_date: "2026-12-05", event_type: "Corporate", source: "Google", stage: "Lost – after quote", tier: "", quote_value: "6000", contract_value: "", collected: "", notes: "Went cheaper" },
   { client: "Rachel Cohen", lead_date: "2026-06-01", event_date: "2027-02-14", event_type: "Social", source: "Wedding show", stage: "Consult", tier: "Effortless", quote_value: "", contract_value: "", collected: "", notes: "" },
   { client: "Maya Gill", lead_date: "2026-07-07", event_date: "2027-07-07", event_type: "Wedding", source: "Instagram", stage: "Lost – no consult", tier: "", quote_value: "", contract_value: "", collected: "", notes: "" },
-  { client: "Grace Chen", lead_date: "2026-08-08", event_date: "2027-08-08", event_type: "Wedding", source: "Website", stage: "Booked", tier: "", quote_value: "", contract_value: "", collected: "", notes: "" }, // error: won without value
+  { client: "Grace Chen", lead_date: "2026-08-08", event_date: "2027-08-08", event_type: "Wedding", source: "Website", stage: "Booked", tier: "", quote_value: "", contract_value: "", collected: "", notes: "" }, // booked: won even without values
   { client: "", lead_date: "2026-08-09", event_date: "", event_type: "", source: "", stage: "New lead", tier: "", quote_value: "", contract_value: "", collected: "", notes: "" }, // error: no name
 ];
 const opts = { fileName: "tracker.csv", mapping: INTERIM_TRACKER.mapping, preset: INTERIM_TRACKER, onDuplicate: "skip" as const };
@@ -27,10 +27,9 @@ describe("CSV import with the interim tracker preset", () => {
     expect(autoMap(Object.keys(tracker[0]))).toEqual(INTERIM_TRACKER.mapping);
   });
 
-  it("previews new / duplicate / error counts", async () => {
+  it("previews new / duplicate / error counts (Booked rows no longer need amounts)", async () => {
     const p = await withCtx(env.as(env.sameer), (tx) => previewImport(tx, env.as(env.sameer), tracker, opts));
-    expect({ total: p.total, newCount: p.newCount, dup: p.duplicateCount, err: p.errorCount }).toEqual({ total: 7, newCount: 5, dup: 0, err: 2 });
-    expect(p.rows.find((r) => r.rowNumber === 6)!.reasons[0]).toMatch(/without a contract or quote value/);
+    expect({ total: p.total, newCount: p.newCount, dup: p.duplicateCount, err: p.errorCount }).toEqual({ total: 7, newCount: 6, dup: 0, err: 1 });
     expect(p.rows.find((r) => r.rowNumber === 7)!.reasons[0]).toMatch(/No name/);
   });
 
@@ -39,12 +38,12 @@ describe("CSV import with the interim tracker preset", () => {
     const ctx = env.as(env.sameer);
     const r = await withCtx(ctx, (tx) => commitImport(tx, ctx, tracker, opts));
     batchId = r.batchId;
-    expect(r).toMatchObject({ created: 5, merged: 0, skipped: 0 });
-    expect(r.errors.map((e) => e.row)).toEqual([6, 7]);
+    expect(r).toMatchObject({ created: 6, merged: 0, skipped: 0 });
+    expect(r.errors.map((e) => e.row)).toEqual([7]);
 
     const rows = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.importBatchId, batchId)));
     const by = Object.fromEntries(rows.map((l) => [l.lastName, l]));
-    expect(by.Park).toMatchObject({ status: "won", contractValue: 9800, collectedAmount: 9800, partnerName: "Daniel Park", source: "instagram", tierInterest: "elegant", furthestStage: 5 });
+    expect(by.Park).toMatchObject({ status: "won", quoteValue: 9500, partnerName: "Daniel Park", source: "instagram", tierInterest: "elegant", furthestStage: 5 });
     expect(by.Park.createdAt.toISOString().slice(0, 10)).toBe("2026-03-02");
     expect(by.Silva).toMatchObject({ status: "proposal_sent", quoteValue: 14200, source: "referral" });
     expect(by.Haddad).toMatchObject({ status: "lost", lostReason: "other", furthestStage: 4, eventType: "corporate" });
@@ -52,7 +51,7 @@ describe("CSV import with the interim tracker preset", () => {
     expect(by.Gill).toMatchObject({ status: "lost", lostReason: "no_response", furthestStage: 1 });
 
     const ev = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(eq(leadEvents.type, "imported")));
-    expect(ev.length).toBe(5);
+    expect(ev.length).toBe(6);
     expect(ev.every((e) => (e.payload as any).importBatchId === batchId && e.actorKind === "import")).toBe(true);
   });
 
@@ -63,7 +62,7 @@ describe("CSV import with the interim tracker preset", () => {
     expect(p.newCount).toBe(0);
     const r = await withCtx(ctx, (tx) => commitImport(tx, ctx, tracker, opts));
     expect(r.created).toBe(0);
-    expect(r.skipped).toBe(5);
+    expect(r.skipped).toBe(6);
     const after = (await withCtx(env.sys, (tx) => tx.select({ n: sql<number>`count(*)::int` }).from(leads)))[0].n;
     expect(after).toBe(before);
   });
@@ -71,11 +70,11 @@ describe("CSV import with the interim tracker preset", () => {
   it("undo archives the batch's leads (never deletes them)", async () => {
     const ctx = env.as(env.sameer);
     const r = await withCtx(ctx, (tx) => undoImport(tx, ctx, batchId));
-    expect(r.archived).toBe(5);
+    expect(r.archived).toBe(6);
     const live = await withCtx(env.sys, (tx) => tx.select().from(leads).where(and(eq(leads.importBatchId, batchId), isNull(leads.archivedAt))));
     expect(live.length).toBe(0);
     const all = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.importBatchId, batchId)));
-    expect(all.length).toBe(5);
+    expect(all.length).toBe(6);
     const [b] = await withCtx(env.sys, (tx) => tx.select().from(importBatches).where(eq(importBatches.id, batchId)));
     expect(b.undoneAt).toBeTruthy();
     await expect(withCtx(ctx, (tx) => undoImport(tx, ctx, batchId))).rejects.toThrow(/already undone/);
@@ -84,7 +83,7 @@ describe("CSV import with the interim tracker preset", () => {
   it("after an undo the same file can be imported again", async () => {
     const ctx = env.as(env.sameer);
     const r = await withCtx(ctx, (tx) => commitImport(tx, ctx, tracker, opts));
-    expect(r.created).toBe(5);
+    expect(r.created).toBe(6);
     batchId = r.batchId;
   });
 

@@ -9,7 +9,7 @@ type L = {
   id: string; firstName: string | null; lastName: string | null; partnerName: string | null; email: string | null; phone: string | null;
   eventType: string; eventDate: string | null; venueName: string | null; venueCity: string | null; guestCount: number | null;
   budgetMin: number | null; budgetMax: number | null; estimateTotal: number | null; tierInterest: string | null; services: string;
-  message: string | null; quoteValue: number | null; contractValue: number | null; collectedAmount: number | null; source: string; sourceDetail: string | null;
+  message: string | null; quoteValue: number | null; source: string; sourceDetail: string | null;
 };
 
 export function EditDetails({ lead, readOnly }: { lead: L; readOnly: boolean }) {
@@ -87,8 +87,6 @@ export function EditDetails({ lead, readOnly }: { lead: L; readOnly: boolean }) 
       </label>
       <F name="sourceDetail" label="Source detail" value={lead.sourceDetail} />
       <F name="quoteValue" label="Quote" value={lead.quoteValue} />
-      <F name="contractValue" label="Contract" value={lead.contractValue} />
-      <F name="collectedAmount" label="Collected" value={lead.collectedAmount} span />
       <label className="col-span-2 block">
         <span className="label">Message</span>
         <textarea name="message" defaultValue={lead.message ?? ""} rows={3} className="input" />

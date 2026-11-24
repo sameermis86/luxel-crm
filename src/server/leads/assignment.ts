@@ -41,7 +41,6 @@ export async function autoAssign(tx: Tx, ctx: Ctx, lead: Lead, settings?: Settin
         eventType: lead.eventType,
         scoreBand: scoreBand(lead.score, s.scoring),
         budget: budget?.value ?? null,
-        campaignId: lead.campaignId,
         sourceDetail: lead.sourceDetail,
         venueName: lead.venueName,
       },

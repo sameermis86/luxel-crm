@@ -26,12 +26,10 @@ export const IMPORT_FIELDS = {
   message: "Message / notes",
   source: "Source",
   sourceDetail: "Source detail",
-  campaign: "Campaign / utm_campaign",
+  campaign: "utm_campaign",
   submittedAt: "Submitted / lead date",
   stage: "Stage / status",
   quoteValue: "Quote value",
-  contractValue: "Contract value",
-  collected: "Collected",
 } as const;
 export type ImportField = keyof typeof IMPORT_FIELDS;
 export type Mapping = Record<string, ImportField>;
@@ -60,8 +58,6 @@ const H: [RegExp, ImportField][] = [
   [/(submitted|submission (time|date)|lead.?date|created|date received|inquiry date|date)$/, "submittedAt"],
   [/^(stage|status|pipeline stage)$/, "stage"],
   [/(quote|estimate).*(value|amount|total)?$/, "quoteValue"],
-  [/(contract|booked|booking).*(value|amount|total)?$/, "contractValue"],
-  [/(collected|paid|deposit)/, "collected"],
 ];
 
 /** Guess a mapping from header names. Each field is used at most once (first column wins). */
@@ -112,8 +108,8 @@ export const INTERIM_TRACKER: Preset = {
     stage: "stage",
     tier: "tier",
     quote_value: "quoteValue",
-    contract_value: "contractValue",
-    collected: "collected",
+    contract_value: "ignore", // revenue is tracked in the proposals tool
+    collected: "ignore",
     notes: "message",
   },
   stages: {
@@ -241,7 +237,7 @@ export function parseRow(raw: Record<string, string>, rowNumber: number, mapping
   if (got.message) input.message = got.message;
   if (got.sourceDetail) input.sourceDetail = got.sourceDetail;
   if (got.campaign) input.utmCampaign = got.campaign;
-  for (const [f, k] of [["quoteValue", "quoteValue"], ["contractValue", "contractValue"], ["collected", "collectedAmount"]] as const) {
+  for (const [f, k] of [["quoteValue", "quoteValue"]] as const) {
     if (got[f]) {
       const n = parseMoney(got[f]!);
       if (n == null) errors.push(`Unreadable ${IMPORT_FIELDS[f].toLowerCase()} "${got[f]}"`);
@@ -260,9 +256,6 @@ export function parseRow(raw: Record<string, string>, rowNumber: number, mapping
 
   const stage = mapStage(got.stage ?? null, opts.preset);
   if (got.stage && !stage) errors.push(`Unknown stage "${got.stage}"`);
-  if (stage?.status === "won" && input.contractValue == null && input.quoteValue == null) {
-    errors.push("Booked/won without a contract or quote value");
-  }
 
   if (!input.firstName && !input.lastName && !input.email && !input.phone) errors.push("No name, email or phone");
 

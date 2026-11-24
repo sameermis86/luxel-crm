@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { savedViews, SOURCES, STATUSES, EVENT_TYPES } from "@/db/schema";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
-import { listLeads, listUsers, listCampaigns } from "@/server/leads/queries";
+import { listLeads, listUsers } from "@/server/leads/queries";
 import { parseLeadFilter, parseListParams, filterToParams, describeFilter, FILTER_KEYS, type LeadFilter } from "@/lib/lead-filters";
 import { STATUS_LABELS } from "@/lib/status";
 import { titleCase } from "@/lib/format";
@@ -14,22 +14,21 @@ export const dynamic = "force-dynamic";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
-const FORM_KEYS = new Set(["q", "status", "qualification", "source", "campaign", "event_type", "owner", "created_from", "created_to", "awaiting"]);
+const FORM_KEYS = new Set(["q", "status", "qualification", "source", "event_type", "owner", "created_from", "created_to", "awaiting"]);
 
 export default async function LeadsPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const filter = parseLeadFilter(sp);
   const params = parseListParams(sp);
   const data = await withPage(async (tx, p) => {
-    const [{ rows, total }, users, campaigns, views] = await Promise.all([
+    const [{ rows, total }, users, views] = await Promise.all([
       listLeads(tx, filter, p.wc, params),
       listUsers(tx),
-      listCampaigns(tx),
       tx.select().from(savedViews).where(eq(savedViews.userId, p.session.userId)),
     ]);
-    return { rows, total, users, campaigns, views };
+    return { rows, total, users, views };
   });
-  const { rows, total, users, campaigns, views, page } = data;
+  const { rows, total, users, views, page } = data;
   const query = filterToParams(filter).toString();
   const pages = Math.max(1, Math.ceil(total / params.per));
   const single = (v: string[] | undefined) => (v?.length === 1 ? v[0] : "");
@@ -84,7 +83,6 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
         <Select name="status" label="Status" value={single(filter.status)} multi={multi(filter.status)} options={STATUSES.map((s) => [s, STATUS_LABELS[s]])} />
         <Select name="qualification" label="Qualification" value={single(filter.qualification)} multi={multi(filter.qualification)} options={[["qualified", "Qualified"], ["needs_info", "Needs info"], ["unqualified", "Unqualified"]]} />
         <Select name="source" label="Source" value={single(filter.source)} multi={multi(filter.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
-        <Select name="campaign" label="Campaign" value={single(filter.campaign)} multi={multi(filter.campaign)} options={[["none", "No campaign"], ...campaigns.map((c) => [c.id, c.name] as [string, string])]} />
         <Select name="event_type" label="Event type" value={single(filter.event_type)} multi={multi(filter.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
         <Select name="owner" label="Owner" value={single(filter.owner)} multi={multi(filter.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />
         <div>

@@ -23,7 +23,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/leads">Leads</NavLink>
             <NavLink href="/follow-ups">My follow-ups</NavLink>
             {can(session, "imports:create") && <NavLink href="/imports">Import</NavLink>}
-            {can(session, "campaigns:manage") && <NavLink href="/campaigns">Campaigns</NavLink>}
             {can(session, "settings:manage") && <NavLink href="/settings">Settings</NavLink>}
           </nav>
           <div className="flex shrink-0 items-center gap-3 text-sm">

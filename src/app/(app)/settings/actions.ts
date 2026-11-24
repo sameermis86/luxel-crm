@@ -147,7 +147,6 @@ const ruleSchema = z.object({
   budgetMin: z.number().nullable(),
   budgetMax: z.number().nullable(),
   venuePartners: z.array(z.string()),
-  campaignIds: z.array(z.string().uuid()),
   assignTo: z.string(),
   pool: z.array(z.string().uuid()),
   active: z.boolean(),
@@ -171,7 +170,6 @@ export async function saveRuleAction(_: R | null, fd: FormData): Promise<R> {
       budgetMin: n("budgetMin"),
       budgetMax: n("budgetMax"),
       venuePartners: String(fd.get("venuePartners") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-      campaignIds: fd.getAll("campaignIds"),
       assignTo: String(fd.get("assignTo") ?? "round_robin"),
       pool: fd.getAll("pool"),
       active: fd.get("active") === "on",
@@ -183,7 +181,6 @@ export async function saveRuleAction(_: R | null, fd: FormData): Promise<R> {
     if (r.budgetMin != null) conditions.budgetMin = r.budgetMin;
     if (r.budgetMax != null) conditions.budgetMax = r.budgetMax;
     if (r.venuePartners.length) conditions.venuePartners = r.venuePartners;
-    if (r.campaignIds.length) conditions.campaignIds = r.campaignIds;
     const vals = {
       name: r.name,
       priority: r.priority,
