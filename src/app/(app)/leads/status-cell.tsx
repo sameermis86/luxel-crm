@@ -4,14 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { LostReason, Status } from "@/db/schema";
 import { LOST_REASONS } from "@/db/schema";
-import { STATUS_LABELS, LOST_REASON_LABELS, TRANSITIONS } from "@/lib/status";
+import { STATUS_LABELS, LOST_REASON_LABELS, allowedTransitions } from "@/lib/status";
 import { changeStatusInlineAction } from "./actions";
 import { STATUS_TONE } from "@/components/badges";
 
 const TONE = Object.fromEntries(Object.entries(STATUS_TONE).map(([k, v]) => [k, v.pill])) as Record<Status, string>;
 
 /** Status pill that is also a dropdown: change a lead's status without opening it. */
-export function StatusCell({ leadId, recordId, status: initial, readOnly }: { leadId: string; recordId: string; status: Status; readOnly?: boolean }) {
+export function StatusCell({ leadId, recordId, status: initial, readOnly, canUndoWin = false }: { leadId: string; recordId: string; status: Status; readOnly?: boolean; canUndoWin?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(initial);
   const [pendingTo, setPendingTo] = useState<Status | null>(null); // lost / unqualified waiting for a reason
@@ -49,7 +49,7 @@ export function StatusCell({ leadId, recordId, status: initial, readOnly }: { le
     return <span className={`chip ${TONE[status]}`}>{STATUS_LABELS[status]}</span>;
   }
 
-  const options = [status, ...TRANSITIONS[status]];
+  const options = [status, ...allowedTransitions(status, canUndoWin)];
   return (
     <div className="min-w-[150px]">
       <label className="sr-only" htmlFor={`status-${leadId}`}>Status for {recordId}</label>

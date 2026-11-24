@@ -111,24 +111,23 @@ export function plannedConsultStatus(
   return null;
 }
 
-export interface BookingTypeRules { wonServices: string[]; proposalServices: string[] }
+export interface BookingTypeRules { proposalServices: string[] }
 type BookingLike = { startsAt: Date; endsAt: Date | null; status: string; serviceName: string | null };
 const has = (name: string | null, list: string[]) => !!name && list.some((x) => x.trim() && name.toLowerCase().includes(x.trim().toLowerCase()));
 
 /**
  * Status for a lead created from Setmore bookings (someone not in the CRM yet): the furthest stage
- * any confirmed booking shows. "Existing booking" services → Won, quote reviews → Proposal sent,
- * consultations → Consult held (ended) or Consult scheduled (ahead). Null when nothing is confirmed.
+ * any confirmed booking shows. "Existing booking" and quote-review services → Proposal sent,
+ * consultations → Consult held (ended) or Consult scheduled (ahead). Never Won: only a signed
+ * Goodshuffle contract makes a lead Won. Null when nothing is confirmed.
  */
 export function statusForNewLead(bookings: BookingLike[], now: Date, rules: BookingTypeRules): Status | null {
   let best: Status | null = null;
   for (const b of bookings) {
     if (b.status !== "confirmed") continue;
-    const s: Status = has(b.serviceName, rules.wonServices)
-      ? "won"
-      : has(b.serviceName, rules.proposalServices)
-        ? "proposal_sent"
-        : (b.endsAt ?? b.startsAt) <= now ? "consult_held" : "consult_scheduled";
+    const s: Status = has(b.serviceName, rules.proposalServices)
+      ? "proposal_sent"
+      : (b.endsAt ?? b.startsAt) <= now ? "consult_held" : "consult_scheduled";
     if (!best || FUNNEL_RANK[s] > FUNNEL_RANK[best]) best = s;
   }
   return best;

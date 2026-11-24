@@ -54,7 +54,12 @@ function title(e: TimelineEvent, users: Record<string, string>) {
   const p = e.payload ?? {};
   switch (e.type) {
     case "created": return `Lead created${p.mode === "webhook" ? ` from the ${p.form === "quote_builder" ? "Quote Builder" : "Contact Us form"}` : p.mode === "manual" ? " manually" : ""}`;
-    case "imported": return "Imported from CSV";
+    case "imported": {
+      const sub = String(p.submissionId ?? "");
+      if (sub.startsWith("setmore:") || p.raw?.form === "setmore") return `Created from Setmore bookings${p.raw?.appointmentIds?.length ? ` (${p.raw.appointmentIds.length})` : ""}`;
+      if (sub.startsWith("goodshuffle:")) return "Created from Goodshuffle Pro";
+      return "Imported from CSV";
+    }
     case "call_logged": return `Call ${p.direction === "inbound" ? "received" : "made"}${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "email_logged": return `Email ${p.direction === "inbound" ? "received" : "sent"}${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "meeting_logged": return `Meeting${p.outcome ? ` · ${p.outcome}` : ""}`;

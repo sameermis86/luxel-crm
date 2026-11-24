@@ -17,7 +17,7 @@ import {
 } from "@/db/schema";
 import type { Settings } from "@/lib/config/defaults";
 import { normalizeEmail, normalizePhone, strOrNull } from "@/lib/normalize";
-import { FUNNEL_RANK, STAGE_TIMESTAMP, validateTransition } from "@/lib/status";
+import { FUNNEL_RANK, STAGE_TIMESTAMP, validateTransition, isUndoWin } from "@/lib/status";
 import { getSettings } from "../settings";
 
 /* -------------------------------------------------------------------------- */
@@ -271,6 +271,8 @@ export async function updateLead(
       unqualifiedReason: fields.unqualifiedReason ?? current.unqualifiedReason,
     });
     if (!v.ok) throw new LeadError(v.error);
+    if (isUndoWin(current.status, fields.status) && ctx.role !== "owner" && ctx.role !== "system")
+      throw new LeadError("Only an owner can move a won lead back");
   }
   for (const [k, v] of Object.entries(fields)) set(k, v);
   set("duplicateOfId", duplicateOfId);

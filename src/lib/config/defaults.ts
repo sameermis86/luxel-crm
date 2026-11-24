@@ -45,15 +45,16 @@ export const opsSchema = z.object({
 });
 
 export const setmoreSchema = z.object({
-  /** a lead created from a booking of one of these services (case-insensitive "contains") is already a client → Won */
-  wonServices: z.array(z.string()).default([]),
-  /** … of one of these services already has a quote → Proposal sent */
+  /**
+   * A lead created from a booking of one of these services (case-insensitive "contains") is at
+   * Proposal sent. Bookings never make a lead Won: only a signed Goodshuffle contract does.
+   */
   proposalServices: z.array(z.string()).default([]),
 });
 
 export const settingsSchema = z.object({
   businessHours: businessHoursSchema,
-  setmore: setmoreSchema.default({ wonServices: ["existing booking"], proposalServices: ["quote review"] }),
+  setmore: setmoreSchema.default({ proposalServices: ["existing booking", "quote review"] }),
   ops: opsSchema.default({ setupSteps: [], teardownSteps: [], keepDaysAfter: 14 }),
   followUps: followUpSchema,
   utmRules: z.array(utmRuleSchema),
@@ -76,7 +77,7 @@ export const DEFAULT_SERVICE_AREA = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
-  setmore: { wonServices: ["existing booking"], proposalServices: ["quote review"] },
+  setmore: { proposalServices: ["existing booking", "quote review"] },
 
   ops: {
     setupSteps: ["Pull and check {area} items", "Load {area} onto the truck", "Set up {area}", "Photo of {area} when finished"],

@@ -4,7 +4,7 @@ import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
 import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
 import { runOpsSync } from "@/server/ops/sync";
-import { applyBookings, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
+import { applyBookings, undoBookingWins, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,11 @@ async function handle(req: NextRequest) {
     } catch (e) {
       return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
     }
+  }
+
+  // ?setmore=undo-wins: one-off correction of leads the booking sync created as Won
+  if (req.nextUrl.searchParams.get("setmore") === "undo-wins") {
+    return NextResponse.json({ ok: true, undoWins: await undoBookingWins(systemCtx(orgId)) });
   }
 
   const started = Date.now();

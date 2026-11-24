@@ -153,6 +153,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
         query={query}
         users={users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name }))}
         canBulk={can(page.session, "leads:bulk")}
+        canUndoWin={can(page.session, "settings:manage")}
         total={total}
         nowIso={page.now.toISOString()}
       />

@@ -56,13 +56,14 @@ describe("plannedConsultStatus (forward only)", () => {
 
 describe("leads created from bookings", () => {
   const now = new Date("2026-11-24T15:00:00Z");
-  const rules = { wonServices: ["existing booking"], proposalServices: ["quote review"] };
+  const rules = { proposalServices: ["existing booking", "quote review"] };
   const b = (serviceName: string, at: string, status = "confirmed") => ({ serviceName, startsAt: new Date(at), endsAt: null, status });
   it("takes the furthest stage the bookings show, by booking type", () => {
     expect(statusForNewLead([b("In-Person Consultation - New Booking", "2026-12-01T15:00:00Z")], now, rules)).toBe("consult_scheduled");
     expect(statusForNewLead([b("Phone Consultation", "2026-11-20T15:00:00Z")], now, rules)).toBe("consult_held");
     expect(statusForNewLead([b("Phone Consultation", "2026-11-20T15:00:00Z"), b("Quote Review Call", "2026-12-02T15:00:00Z")], now, rules)).toBe("proposal_sent");
-    expect(statusForNewLead([b("Review Meeting at the Studio - Existing Booking", "2026-12-02T15:00:00Z")], now, rules)).toBe("won");
+    // never Won: only a signed Goodshuffle contract makes a lead Won
+    expect(statusForNewLead([b("Review Meeting at the Studio - Existing Booking", "2026-12-02T15:00:00Z")], now, rules)).toBe("proposal_sent");
   });
   it("ignores cancelled bookings", () => {
     expect(statusForNewLead([b("Review Meeting - Existing Booking", "2026-11-20T15:00:00Z", "cancelled")], now, rules)).toBeNull();

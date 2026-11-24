@@ -45,6 +45,8 @@ export function LeadsTable(props: {
   query: string;
   users: { id: string; name: string }[];
   canBulk: boolean;
+  /** owners can move a won lead back (undo a mistaken win) */
+  canUndoWin?: boolean;
   total: number;
   nowIso: string;
 }) {
@@ -99,7 +101,7 @@ export function LeadsTable(props: {
                     <span className="font-mono">{r.recordId}</span> · {titleCase(r.eventType)} · {fmtDate(r.eventDate)}
                   </span>
                 </Link>
-                <StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} />
+                <StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} canUndoWin={props.canUndoWin} />
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                 <span>{r.ownerName ?? "Unassigned"}</span>
@@ -170,7 +172,7 @@ export function LeadsTable(props: {
                     <div className="text-xs text-muted">{titleCase(r.eventType)}</div>
                   </td>
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
-                  <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} /></td>
+                  <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} canUndoWin={props.canUndoWin} /></td>
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
                   <td className="td whitespace-nowrap tabular">
                     {r.nextConsultAt ? (

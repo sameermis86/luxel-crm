@@ -356,3 +356,42 @@ export async function applyBookings(ctx: Ctx, now = new Date()) {
 
   return { linkedByName, created, statusesApplied: st.applied, followUpsMoved, errors };
 }
+
+/**
+ * One-off correction (cron `?setmore=undo-wins`): leads the booking sync created as Won before the
+ * rule changed (bookings never make a lead Won). Only leads still Won from creation, with no
+ * Goodshuffle stage and no status change by anyone since; they go to the stage their bookings show.
+ */
+export async function undoBookingWins(ctx: Ctx, now = new Date()) {
+  const settings = await withCtx(ctx, (tx) => getSettings(tx, ctx.orgId));
+  const candidates = await withCtx(ctx, (tx) =>
+    tx
+      .select({ id: leads.id, recordId: leads.recordId })
+      .from(leads)
+      .where(
+        and(
+          eq(leads.sourceDetail, "Setmore booking"),
+          eq(leads.status, "won"),
+          isNull(leads.goodshuffleStatus),
+          isNull(leads.duplicateOfId),
+          isNull(leads.archivedAt),
+          sql`not exists (select 1 from lead_events e where e.lead_id = ${leads.id} and e.field = 'status')`,
+        ),
+      ),
+  );
+  const moved: { recordId: string; to: Status }[] = [];
+  const errors: { recordId: string; error: string }[] = [];
+  for (const c of candidates) {
+    try {
+      await withCtx(ctx, async (tx) => {
+        const list = await tx.select().from(appointments).where(eq(appointments.leadId, c.id));
+        const to = statusForNewLead(list, now, settings.setmore) ?? "consult_held";
+        await updateLead(tx, ctx, c.id, { status: to }, { now, payload: { via: "setmore", reason: "Bookings don't make a lead Won; only a signed Goodshuffle contract does" } });
+        moved.push({ recordId: c.recordId, to });
+      });
+    } catch (e) {
+      errors.push({ recordId: c.recordId, error: e instanceof LeadError ? e.message : String((e as Error)?.message ?? e) });
+    }
+  }
+  return { moved, errors };
+}

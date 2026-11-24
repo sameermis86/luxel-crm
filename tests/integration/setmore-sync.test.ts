@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withCtx, closeDb } from "@/db/client";
 import { appointments, leads } from "@/db/schema";
 import { createLead } from "@/server/leads/service";
-import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, applyBookings, type SetmoreClient } from "@/server/integrations/setmore";
+import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, applyBookings, undoBookingWins, type SetmoreClient } from "@/server/integrations/setmore";
 import { leadEvents, followUps } from "@/db/schema";
 import { and, isNull } from "drizzle-orm";
 import { listLeads } from "@/server/leads/queries";
@@ -116,7 +116,7 @@ describe("Setmore sync", () => {
     const all = await withCtx(env.sys, (tx) => tx.select().from(leads));
     const grace = all.find((l) => l.id === by("n2").leadId)!;
     const leo = all.find((l) => l.id === by("n4").leadId)!;
-    expect(grace.status).toBe("won");
+    expect(grace.status).toBe("proposal_sent"); // existing booking: never Won from a booking
     expect(grace.createdAt.toISOString()).toBe("2026-11-18T15:00:00.000Z"); // dated at the first booking
     expect(leo.status).toBe("consult_held");
     expect(all.some((l) => l.email === "cx@example.com")).toBe(false);
@@ -127,6 +127,29 @@ describe("Setmore sync", () => {
 
     // idempotent
     expect(await applyBookings(env.sys, NOW)).toMatchObject({ linkedByName: 0, created: 0, statusesApplied: 0, followUpsMoved: 0 });
+  });
+
+  it("undoes wins the booking sync made, through updateLead; owners only by hand", async () => {
+    const won = (await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Was", lastName: "Won", email: "waswon@example.com", status: "won", sourceDetail: "Setmore booking" }))).id;
+    const keep = (await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Signed", lastName: "Gs", email: "gs@example.com", status: "won", sourceDetail: "Setmore booking" }))).id;
+    const { updateLead } = await import("@/server/leads/service");
+    await withCtx(env.sys, (tx) => updateLead(tx, env.sys, keep, { goodshuffleStatus: "signed" }));
+    await withCtx(env.sys, (tx) =>
+      tx.insert(appointments).values({ orgId: env.orgId, source: "setmore", externalId: "w1", leadId: won, customerName: "Was Won", serviceName: "Review Meeting - Existing Booking", startsAt: new Date("2026-11-10T15:00:00Z"), status: "confirmed" }),
+    );
+    const r = await undoBookingWins(env.sys, NOW);
+    expect(r.moved.map((m) => m.to)).toEqual(["proposal_sent"]);
+    const after = await withCtx(env.sys, (tx) => tx.select().from(leads));
+    expect(after.find((l) => l.id === won)!.status).toBe("proposal_sent");
+    expect(after.find((l) => l.id === won)!.wonAt).toBeNull();
+    expect(after.find((l) => l.id === keep)!.status).toBe("won");
+    expect((await undoBookingWins(env.sys, NOW)).moved).toEqual([]); // idempotent
+
+    // by hand: an owner can undo a win, a non-owner can't
+    const staffLike = { ...env.as(env.mansi), role: "staff" as const };
+    await expect(withCtx(staffLike, (tx) => updateLead(tx, staffLike, keep, { status: "proposal_sent" }))).rejects.toThrow(/Only an owner/);
+    const owner = { ...env.as(env.sameer), role: "owner" as const };
+    await withCtx(owner, (tx) => updateLead(tx, owner, keep, { status: "proposal_sent" }));
   });
 
   it("records a failure (e.g. bad token) without throwing away the last good numbers", async () => {

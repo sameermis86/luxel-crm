@@ -19,9 +19,9 @@ the next booked time, and `/leads?consult=upcoming` lists every lead with a book
   1. A booking with no email/phone match is linked to the one live lead with the same full name (no link
      when two leads share the name or only a first name is known).
   2. Otherwise a lead is created (source Other, "Setmore booking", dated at the first booking), with the
-     furthest stage its confirmed bookings show: services containing `setmore.wonServices`
-     ("existing booking") → Won, `setmore.proposalServices` ("quote review") → Proposal sent, other
-     consultations → Consult held / Consult scheduled. People with only cancelled bookings aren't added.
+     furthest stage its confirmed bookings show: services containing `setmore.proposalServices`
+     ("existing booking", "quote review") → Proposal sent, other consultations → Consult held /
+     Consult scheduled. **Bookings never make a lead Won**: only a signed Goodshuffle contract (or a person) does. People with only cancelled bookings aren't added.
   3. Linked leads move forward (below).
   4. An open lead with a consultation ahead isn't "awaiting follow-up": its overdue follow-ups are closed
      ("consultation booked in Setmore") and the next follow-up is set for the meeting. A follow-up someone

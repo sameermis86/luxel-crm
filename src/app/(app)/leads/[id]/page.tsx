@@ -6,7 +6,7 @@ import { can } from "@/server/auth";
 import { getLeadDetail, getTimeline, listUsers, type TimelineFilter } from "@/server/leads/queries";
 import { StatusPill } from "@/components/badges";
 import { MATCH_REASON_LABELS, type MatchReason } from "@/lib/duplicates";
-import { LOST_REASON_LABELS, STATUS_LABELS, TRANSITIONS } from "@/lib/status";
+import { LOST_REASON_LABELS, STATUS_LABELS, allowedTransitions } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, fmtRelative, fullName, titleCase, toLocalInput } from "@/lib/format";
 import { suggestNextFollowUp } from "@/lib/business-hours";
 import { QuickActions } from "./quick-actions";
@@ -90,7 +90,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           <QuickActions
             leadId={lead.id}
             status={lead.status}
-            allowed={TRANSITIONS[lead.status].map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+            allowed={allowedTransitions(lead.status, can(page.session, "settings:manage")).map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
             users={users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name }))}
             ownerId={lead.ownerId}
             suggestedFollowUp={toLocalInput(suggested)}

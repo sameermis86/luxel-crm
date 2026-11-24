@@ -10,7 +10,7 @@ export const TRANSITIONS: Record<Status, Status[]> = {
   consult_held: ["consult_scheduled", "proposal_sent", "won", "lost", "unqualified", "on_hold"],
   proposal_sent: ["consult_held", "won", "lost", "on_hold"],
   on_hold: ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "not_reachable"],
-  won: ["lost"], // cancellation
+  won: ["lost", "proposal_sent", "consult_held"], // cancellation; undoing a mistaken win is owners only (UNDO_WIN)
   lost: ["new", "contacted", "consult_scheduled", "proposal_sent"], // reopen
   unqualified: ["new", "contacted"], // reopen
   not_reachable: ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost"], // they got back in touch
@@ -52,6 +52,10 @@ export const LOST_REASON_LABELS: Record<LostReason, string> = {
   price: "Price", date_unavailable: "Date unavailable", went_with_competitor: "Went with competitor",
   no_response: "No response", out_of_scope: "Out of scope", other: "Other",
 };
+
+/** Leaving Won for anything but Lost undoes a win: owners (and system corrections) only. */
+export const isUndoWin = (from: Status, to: Status) => from === "won" && to !== "won" && to !== "lost";
+export const allowedTransitions = (from: Status, canUndoWin: boolean) => TRANSITIONS[from].filter((to) => canUndoWin || !isUndoWin(from, to));
 
 export function canTransition(from: Status, to: Status): boolean {
   return from !== to && TRANSITIONS[from].includes(to);
