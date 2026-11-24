@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Tx } from "@/db/client";
 import { duplicateCandidates, followUps, leadEvents, leads, users, notifications } from "@/db/schema";
@@ -17,7 +17,7 @@ export const listColumns = {
   venueName: leads.venueName,
   source: leads.source,
   captureChannel: leads.captureChannel,
-  qualification: leads.qualification,
+  goodshuffleStatus: leads.goodshuffleStatus,
   status: leads.status,
   ownerId: leads.ownerId,
   ownerName: users.name,
@@ -124,8 +124,8 @@ export async function getTimeline(tx: Tx, leadId: string, filter: TimelineFilter
     .from(leadEvents)
     .leftJoin(users, eq(users.id, leadEvents.actorId))
     .innerJoin(leads, eq(leads.id, leadEvents.leadId))
-    // past "scored" events stay in the audit log; scoring was removed, so the timeline skips them
-    .where(and(inArray(leadEvents.leadId, ids), ne(leadEvents.type, "scored"), typeFilter))
+    // past "scored"/"qualified" events stay in the audit log; both features were removed, so the timeline skips them
+    .where(and(inArray(leadEvents.leadId, ids), notInArray(leadEvents.type, ["scored", "qualified"]), typeFilter))
     .orderBy(desc(leadEvents.at), desc(leadEvents.seq))
     .limit(500);
 }

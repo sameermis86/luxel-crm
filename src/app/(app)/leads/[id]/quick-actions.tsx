@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import type { Qualification, Status } from "@/db/schema";
+import type { Status } from "@/db/schema";
 import { LOST_REASONS } from "@/db/schema";
 import { LOST_REASON_LABELS } from "@/lib/status";
 import { toLocalInput } from "@/lib/format";
@@ -10,11 +10,10 @@ import {
   setFollowUpAction,
   changeStatusAction,
   reassignAction,
-  overrideQualificationAction,
   type ActionResult,
 } from "../actions";
 
-type Panel = null | "call" | "email" | "meeting" | "note" | "follow_up" | "status" | "reassign" | "qualify";
+type Panel = null | "call" | "email" | "meeting" | "note" | "follow_up" | "status" | "reassign";
 
 export function QuickActions(props: {
   leadId: string;
@@ -24,8 +23,6 @@ export function QuickActions(props: {
   ownerId: string | null;
   suggestedFollowUp: string;
   quoteValue: number | null;
-  qualification: Qualification;
-  override: boolean;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [prompt, setPrompt] = useState<string | null>(null); // suggested next follow-up after an activity
@@ -38,7 +35,6 @@ export function QuickActions(props: {
     ["follow_up", "Set follow-up"],
     ["status", "Change status"],
     ["reassign", "Reassign"],
-    ["qualify", "Qualification"],
   ];
 
   return (
@@ -74,7 +70,6 @@ export function QuickActions(props: {
       )}
       {panel === "status" && <StatusForm {...props} onDone={() => setPanel(null)} />}
       {panel === "reassign" && <ReassignForm {...props} onDone={() => setPanel(null)} />}
-      {panel === "qualify" && <QualifyForm {...props} onDone={() => setPanel(null)} />}
     </div>
   );
 }
@@ -246,25 +241,3 @@ function ReassignForm(props: { leadId: string; users: { id: string; name: string
   );
 }
 
-function QualifyForm(props: { leadId: string; qualification: Qualification; override: boolean; onDone: () => void }) {
-  const { state, run, pending } = useFormAction(overrideQualificationAction.bind(null, props.leadId), props.onDone);
-  return (
-    <form action={run} className="mt-3 flex flex-wrap items-end gap-3 rounded-md border border-edge bg-paper/50 p-3">
-      <label className="block">
-        <span className="label">Set qualification</span>
-        <select name="qualification" className="input" defaultValue={props.override ? props.qualification : "qualified"}>
-          <option value="qualified">Qualified</option>
-          <option value="needs_info">Needs info</option>
-          <option value="unqualified">Unqualified</option>
-          {props.override && <option value="auto">Automatic (remove override)</option>}
-        </select>
-      </label>
-      <label className="block min-w-[260px] flex-1">
-        <span className="label">Reason (required for an override)</span>
-        <input name="reason" className="input" />
-      </label>
-      <button className="btn-primary" disabled={pending}>Save</button>
-      <Msg state={state} />
-    </form>
-  );
-}

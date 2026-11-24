@@ -6,12 +6,6 @@ import { EVENT_TYPES, SOURCES } from "@/db/schema";
  * per org in Settings (stored in org_settings.settings, deep-merged over these).
  */
 
-export const qualificationSchema = z.object({
-  minBudget: z.number(),
-  minLeadTimeDays: z.number(),
-  requireEventDateForQualified: z.boolean(),
-  serviceArea: z.array(z.string()),
-});
 
 export const businessHoursSchema = z.object({
   timezone: z.string(),
@@ -42,7 +36,6 @@ export const utmRuleSchema = z.object({
 });
 
 export const settingsSchema = z.object({
-  qualification: qualificationSchema,
   businessHours: businessHoursSchema,
   followUps: followUpSchema,
   utmRules: z.array(utmRuleSchema),
@@ -50,7 +43,6 @@ export const settingsSchema = z.object({
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
-export type QualificationConfig = Settings["qualification"];
 
 /** GTA + Golden Horseshoe, including the neighbourhood / former-municipality names people actually type. */
 export const DEFAULT_SERVICE_AREA = [
@@ -66,12 +58,7 @@ export const DEFAULT_SERVICE_AREA = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
-  qualification: {
-    minBudget: 2000,
-    minLeadTimeDays: 14,
-    requireEventDateForQualified: true,
-    serviceArea: DEFAULT_SERVICE_AREA,
-  },
+
   businessHours: { timezone: "America/Toronto", days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17 },
   followUps: {
     firstResponseBusinessHours: 2,

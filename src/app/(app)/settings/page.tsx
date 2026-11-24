@@ -6,7 +6,7 @@ import { can } from "@/server/auth";
 import { titleCase } from "@/lib/format";
 import type { AssignmentConditions } from "@/lib/assignment";
 import { ActionForm, ActionButton } from "@/components/action-form";
-import { saveSettingsAction, resetSettingsAction, recheckQualificationAction, saveUserAction, saveRuleAction, deleteRuleAction } from "./actions";
+import { saveSettingsAction, resetSettingsAction, saveUserAction, saveRuleAction, deleteRuleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,33 +31,14 @@ export default async function SettingsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl">Settings</h1>
-          <p className="mt-1 text-sm text-muted">Owners only. Qualification never uses names or any personal characteristic, only budget, timing, service area and contact details.</p>
+          <p className="mt-1 text-sm text-muted">Owners only.</p>
         </div>
         <div className="flex gap-2">
-          <ActionButton action={recheckQualificationAction} label="Recheck qualification now" />
-          <ActionButton action={resetSettingsAction} label="Reset to defaults" confirmText="Reset qualification and follow-up settings to the defaults?" className="btn-ghost" />
+          <ActionButton action={resetSettingsAction} label="Reset to defaults" confirmText="Reset follow-up and business-hours settings to the defaults?" className="btn-ghost" />
         </div>
       </div>
 
       <ActionForm action={saveSettingsAction} submitLabel="Save settings" className="space-y-6">
-        {/* Qualification */}
-        <section className="card p-4">
-          <h2 className="text-xl">Qualification</h2>
-          <div className="mt-3 grid gap-4 lg:grid-cols-[1fr_2fr]">
-            <div className="flex flex-wrap gap-3">
-              <N name="qualification.minBudget" value={s.qualification.minBudget} label="Minimum budget ($)" w="w-28" />
-              <N name="qualification.minLeadTimeDays" value={s.qualification.minLeadTimeDays} label="Minimum lead time (days)" w="w-28" />
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="qualification.requireEventDateForQualified" defaultChecked={s.qualification.requireEventDateForQualified} />
-                Require an event date to be qualified
-              </label>
-            </div>
-            <label className="block">
-              <span className="label">Service area (one city per line; a known venue city outside this list is unqualified)</span>
-              <textarea name="qualification.serviceArea" rows={7} defaultValue={s.qualification.serviceArea.join("\n")} className="input font-mono text-xs" />
-            </label>
-          </div>
-        </section>
 
         {/* Follow-ups */}
         <section className="card p-4">

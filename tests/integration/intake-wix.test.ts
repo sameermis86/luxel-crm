@@ -51,7 +51,7 @@ describe("POST /api/intake/wix", () => {
     expect((await post(quote("x1"), "bad")).status).toBe(401);
   });
 
-  it("acceptance: a Quote Builder submission becomes a qualified, assigned lead with a follow-up", async () => {
+  it("acceptance: a Quote Builder submission becomes an assigned lead with a follow-up", async () => {
     const t0 = Date.now();
     const res = await post(quote("qb-1"));
     const json = await res.json();
@@ -63,7 +63,6 @@ describe("POST /api/intake/wix", () => {
     expect(lead.recordId).toMatch(/^LX-\d{6}$/);
     expect(lead.source).toBe("google_ads"); // origin from UTM
     expect(lead.captureChannel).toBe("quote_builder"); // channel from form
-    expect(lead.qualification).toBe("qualified");
     expect([env.sameer.id, env.mansi.id]).toContain(lead.ownerId);
     expect(lead.nextFollowUpAt).toBeTruthy();
     const fus = await withCtx(env.sys, (tx) => tx.select().from(followUps).where(and(eq(followUps.leadId, lead.id), isNull(followUps.doneAt))));
@@ -136,7 +135,6 @@ describe("backfill mode", () => {
     expect(lead.createdAt.toISOString()).toBe("2025-06-02T15:00:00.000Z");
     expect(lead.ownerId).toBeNull();
     expect(lead.nextFollowUpAt).toBeNull();
-    expect(lead.qualification).toBe("unqualified"); // event date has passed
     const [ev] = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "created"))));
     expect(ev.actorKind).toBe("import");
   });

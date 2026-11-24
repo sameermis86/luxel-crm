@@ -68,7 +68,7 @@ export async function assignLead(tx: Tx, ctx: Ctx, leadId: string, userId: strin
       to: owner.email,
       subject: `New lead assigned: ${lead.recordId} ${name} `,
       html: `<p>Hi ${esc(owner.name)},</p><p><strong>${esc(lead.recordId)} ${esc(name)}</strong> was assigned to you.</p>
-        <p>${esc(lead.eventType)} · ${esc(lead.eventDate ?? "date TBD")} · ${esc(lead.qualification)}</p>
+        <p>${esc(lead.eventType)} · ${esc(lead.eventDate ?? "date TBD")}</p>
         <p><a href="${appUrl(`/leads/${lead.id}`)}">Open the lead</a></p>`,
     }),
   );

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       budget_max: r.budgetMax,
       source: r.source,
       capture_channel: r.captureChannel,
-      qualification: r.qualification,
+      goodshuffle_stage: r.goodshuffleStatus,
       status: r.status,
       owner: r.ownerName,
       next_follow_up_at: r.nextFollowUpAt?.toISOString() ?? "",

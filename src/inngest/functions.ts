@@ -13,14 +13,14 @@ export const dailyDigest = inngest.createFunction(
   },
 );
 
-/** 02:15 Toronto: recheck open leads' qualification + nightly duplicate scan. */
+/** 02:15 Toronto: nightly duplicate scan. */
 export const nightly = inngest.createFunction(
-  { id: "nightly-requalify-and-dedupe", retries: 1 },
+  { id: "nightly-dedupe", retries: 1 },
   { cron: "TZ=America/Toronto 15 2 * * *" },
   async ({ step }) => {
     const orgId = await step.run("resolve-org", resolveOrgId);
     if (!orgId) return { skipped: "no org" };
-    return step.run("requalify-and-dedupe", () => runNightly(orgId));
+    return step.run("dedupe", () => runNightly(orgId));
   },
 );
 

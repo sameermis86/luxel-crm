@@ -37,6 +37,7 @@ export const SOURCES = [
   "phone",
   "email",
   "walk_in",
+  "goodshuffle",
   "other",
 ] as const;
 export const STATUSES = [
@@ -50,7 +51,6 @@ export const STATUSES = [
   "unqualified",
   "on_hold",
 ] as const;
-export const QUALIFICATIONS = ["qualified", "unqualified", "needs_info"] as const;
 export const ROLES = ["owner", "manager", "staff"] as const;
 export const ACTOR_KINDS = ["user", "system", "webhook", "import"] as const;
 export const EVENT_KINDS = [
@@ -59,7 +59,7 @@ export const EVENT_KINDS = [
   "status_changed",
   "assigned",
   "scored", // historical only: scoring was removed (no new events)
-  "qualified",
+  "qualified", // historical only: qualification was removed
   "note_added",
   "call_logged",
   "email_logged",
@@ -80,7 +80,6 @@ export const eventTypeEnum = pgEnum("event_type", EVENT_TYPES);
 export const tierEnum = pgEnum("tier", TIERS);
 export const sourceEnum = pgEnum("lead_source", SOURCES);
 export const statusEnum = pgEnum("lead_status", STATUSES);
-export const qualificationEnum = pgEnum("qualification", QUALIFICATIONS);
 export const roleEnum = pgEnum("user_role", ROLES);
 export const actorKindEnum = pgEnum("actor_kind", ACTOR_KINDS);
 export const eventKindEnum = pgEnum("lead_event_type", EVENT_KINDS);
@@ -92,7 +91,6 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export type Tier = (typeof TIERS)[number];
 export type Source = (typeof SOURCES)[number];
 export type Status = (typeof STATUSES)[number];
-export type Qualification = (typeof QUALIFICATIONS)[number];
 export type Role = (typeof ROLES)[number];
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 export type EventKind = (typeof EVENT_KINDS)[number];
@@ -207,10 +205,9 @@ export const leads = pgTable(
     lostReasonDetail: text("lost_reason_detail"),
     unqualifiedReason: text("unqualified_reason"),
 
-    qualification: qualificationEnum("qualification").notNull().default("needs_info"),
-    qualificationReasons: text("qualification_reasons").array().notNull().default(sql`'{}'::text[]`),
-    qualificationOverride: boolean("qualification_override").notNull().default(false),
-    qualificationOverrideReason: text("qualification_override_reason"),
+    /** Goodshuffle project stage (new / quote_sent / action_needed / signed / lost) and project number */
+    goodshuffleStatus: text("goodshuffle_status"),
+    goodshuffleProject: text("goodshuffle_project"),
 
     ownerId: uuid("owner_id").references(() => users.id),
     nextFollowUpAt: ts("next_follow_up_at"),

@@ -5,14 +5,13 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { withCtx } from "@/db/client";
-import { appointments, notifications, savedViews, LOST_REASONS, STATUSES, QUALIFICATIONS, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
+import { appointments, notifications, savedViews, LOST_REASONS, STATUSES, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
 import { requireSession, ctxFor, authorize, ForbiddenError } from "@/server/auth";
 import {
   updateLead,
   logActivity,
   setFollowUp,
   completeFollowUp,
-  overrideQualification,
   LeadError,
 } from "@/server/leads/service";
 import { assignLead } from "@/server/leads/assignment";
@@ -269,20 +268,6 @@ export async function reassignAction(leadId: string, _: ActionResult | null, fd:
     const ownerId = nullable(fd, "ownerId") ?? null;
     await withCtx(ctx, (tx) => assignLead(tx, ctx, leadId, ownerId, { how: "manual" }));
     return { ok: true, message: "Reassigned" };
-  });
-  revalidatePath(`/leads/${leadId}`);
-  return res;
-}
-
-export async function overrideQualificationAction(leadId: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
-  const session = await requireSession();
-  const ctx = ctxFor(session);
-  const res = await run(async () => {
-    authorize(session, "leads:write");
-    const q = str(fd, "qualification");
-    const qualification = q === "auto" ? null : z.enum(QUALIFICATIONS).parse(q);
-    await withCtx(ctx, (tx) => overrideQualification(tx, ctx, leadId, { qualification, reason: str(fd, "reason") ?? "" }));
-    return { ok: true, message: qualification ? "Qualification overridden" : "Back to automatic qualification" };
   });
   revalidatePath(`/leads/${leadId}`);
   return res;

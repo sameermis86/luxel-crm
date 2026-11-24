@@ -40,13 +40,12 @@ describe("record_id", () => {
 });
 
 describe("createLead", () => {
-  it("normalizes, qualifies and logs created + qualified", async () => {
+  it("normalizes and logs created", async () => {
     const lead = await withCtx(env.sys, (tx) => createLead(tx, env.sys, baseLead));
     expect(lead.emailNormalized).toBe("sofiarossi@gmail.com");
     expect(lead.phoneE164).toBe("+19055550123");
-    expect(lead.qualification).toBe("qualified");
     const ev = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(eq(leadEvents.leadId, lead.id)));
-    expect(ev.map((e) => e.type).sort()).toEqual(["created", "qualified"]);
+    expect(ev.map((e) => e.type).sort()).toEqual(["created"]);
   });
 });
 

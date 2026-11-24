@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
 import { getLeadDetail, getTimeline, listUsers, type TimelineFilter } from "@/server/leads/queries";
-import { StatusPill, QualBadge } from "@/components/badges";
+import { StatusPill } from "@/components/badges";
 import { MATCH_REASON_LABELS, type MatchReason } from "@/lib/duplicates";
 import { LOST_REASON_LABELS, STATUS_LABELS, TRANSITIONS } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, fmtRelative, fullName, titleCase, toLocalInput } from "@/lib/format";
@@ -72,7 +72,6 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <StatusPill status={lead.status} />
-              <QualBadge q={lead.qualification} override={lead.qualificationOverride} />
               <span className="text-muted">·</span>
               <span>{owner ? <>Owner: <strong className="font-medium">{owner.name}</strong></> : <span className="text-bloom">Unassigned</span>}</span>
               <span className="text-muted">·</span>
@@ -93,8 +92,6 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             ownerId={lead.ownerId}
             suggestedFollowUp={toLocalInput(suggested)}
             quoteValue={lead.quoteValue}
-            qualification={lead.qualification}
-            override={lead.qualificationOverride}
           />
         )}
       </header>
@@ -128,17 +125,6 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
 
         {/* Sidebar */}
         <aside className="space-y-4">
-          <section className="card p-4">
-            <h2 className="mb-2 text-lg">Qualification</h2>
-            <QualBadge q={lead.qualification} override={lead.qualificationOverride} />
-            {lead.qualificationReasons.length > 0 && (
-              <div className="mt-2 text-sm">
-                <p className="label">Notes</p>
-                <ul className="list-disc pl-4 text-muted">{lead.qualificationReasons.map((r) => <li key={r}>{r}</li>)}</ul>
-              </div>
-            )}
-            {lead.qualificationOverride && <p className="mt-2 text-xs text-muted">Overridden: {lead.qualificationOverrideReason}</p>}
-          </section>
 
           <EditDetails
             readOnly={readOnly}

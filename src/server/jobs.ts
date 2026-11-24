@@ -2,32 +2,15 @@ import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { withCtx, systemCtx } from "@/db/client";
 import { leads, users } from "@/db/schema";
 import { getSettings } from "./settings";
-import { requalifyLead } from "./leads/service";
 import { scanAllDuplicates } from "./leads/duplicates";
 import { myFollowUps, newUnassignedLeads, myLeadsWithoutFollowUp } from "./followups";
 import { sendEmail, appUrl, esc } from "./email";
 import { fmtDateTime, fmtDate } from "@/lib/format";
 
-/**
- * Nightly: recompute every open lead's qualification (an event drifts inside the minimum lead time as the
- * event approaches) and re-run duplicate detection across the whole book.
- */
-export async function runNightly(orgId: string, now = new Date()) {
+/** Nightly: re-run duplicate detection across the whole book. */
+export async function runNightly(orgId: string, _now = new Date()) {
   const ctx = systemCtx(orgId);
-  let requalified = 0;
-  const ids = await withCtx(ctx, (tx) =>
-    tx
-      .select({ id: leads.id })
-      .from(leads)
-      .where(and(isNull(leads.duplicateOfId), isNull(leads.archivedAt), notInArray(leads.status, ["won", "lost", "unqualified"]))),
-  );
-  // small transactions so one bad row can't block the run
-  for (const { id } of ids) {
-    const r = await withCtx(ctx, async (tx) => requalifyLead(tx, ctx, id, await getSettings(tx, orgId), now));
-    if (r.changed.length) requalified++;
-  }
-  const dupes = await withCtx(ctx, (tx) => scanAllDuplicates(tx, ctx));
-  return { checked: ids.length, requalified, ...dupes };
+  return withCtx(ctx, (tx) => scanAllDuplicates(tx, ctx));
 }
 
 export interface Digest {

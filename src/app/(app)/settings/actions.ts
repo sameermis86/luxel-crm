@@ -37,18 +37,9 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
     authorize(session, "settings:manage");
     const next: any = structuredClone(DEFAULT_SETTINGS);
     next.businessHours.days = [];
-    next.scoring.budgetBands = [];
-    next.scoring.timing.bands = [];
-    next.qualification.requireEventDateForQualified = false;
     for (const [k, raw] of fd.entries()) {
       if (k.startsWith("$") || typeof raw !== "string") continue;
-      if (k === "qualification.serviceArea") {
-        next.qualification.serviceArea = raw.split(/\n|,/).map((s) => s.trim()).filter(Boolean);
-      } else if (k === "businessHours.days") {
-        next.businessHours.days.push(Number(raw));
-      } else if (k === "qualification.requireEventDateForQualified") {
-        next.qualification.requireEventDateForQualified = true;
-      } else if (k === "businessHours.timezone") {
+      if (k === "businessHours.timezone") {
         next.businessHours.timezone = raw;
       } else if (raw.trim() !== "") {
         setPath(next, k, Number(raw.replace(/[$,]/g, "")));
@@ -63,7 +54,7 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
         .onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: parsed, updatedBy: session.userId, updatedAt: new Date() } }),
     );
     revalidatePath("/settings");
-    return { ok: true, message: "Settings saved. Qualification updates as leads change and nightly; use “Recheck qualification now” to apply immediately." };
+    return { ok: true, message: "Settings saved." };
   } catch (e) {
     return fail(e);
   }
@@ -77,18 +68,6 @@ export async function resetSettingsAction(): Promise<R> {
     await withCtx(ctx, (tx) => tx.update(orgSettings).set({ settings: {}, updatedBy: session.userId, updatedAt: new Date() }).where(eq(orgSettings.orgId, ctx.orgId)));
     revalidatePath("/settings");
     return { ok: true, message: "Back to defaults" };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function recheckQualificationAction(): Promise<R> {
-  const session = await requireSession();
-  try {
-    authorize(session, "settings:manage");
-    const r = await runNightly(session.orgId);
-    revalidatePath("/");
-    return { ok: true, message: `Checked ${r.checked} open leads, ${r.requalified} changed, ${r.newCandidates} new possible duplicates` };
   } catch (e) {
     return fail(e);
   }

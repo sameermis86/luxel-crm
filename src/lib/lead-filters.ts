@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
-import { leads, duplicateCandidates, EVENT_TYPES, QUALIFICATIONS, SOURCES, STATUSES } from "@/db/schema";
+import { leads, duplicateCandidates, EVENT_TYPES, SOURCES, STATUSES } from "@/db/schema";
 import type { Settings } from "./config/defaults";
 import { endOfDayExclusiveInTz, startOfDayInTz } from "./dates";
 
@@ -26,7 +26,6 @@ export const FUNNEL_REACHED = { contacted: 1, consult: 2, consult_held: 3, propo
 export const leadFilterSchema = z.object({
   q: z.string().trim().max(200).optional().catch(undefined),
   status: csv(z.enum(STATUSES)).catch(undefined),
-  qualification: csv(z.enum(QUALIFICATIONS)).catch(undefined),
   source: csv(z.enum(SOURCES)).catch(undefined),
   event_type: csv(z.enum(EVENT_TYPES)).catch(undefined),
   owner: csv(z.union([z.string().uuid(), z.literal("unassigned"), z.literal("me")])).catch(undefined),
@@ -66,7 +65,6 @@ export const SORTABLE = {
   name: sql`lower(coalesce(${leads.lastName}, '') || ' ' || coalesce(${leads.firstName}, ''))`,
   event_date: leads.eventDate,
   source: leads.source,
-  qualification: leads.qualification,
   status: leads.status,
   next_follow_up: leads.nextFollowUpAt,
   quoted: leads.proposalSentAt,
@@ -168,7 +166,6 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
     );
   }
   if (f.status?.length) c.push(inArray(leads.status, f.status));
-  if (f.qualification?.length) c.push(inArray(leads.qualification, f.qualification));
   if (f.source?.length) c.push(inArray(leads.source, f.source));
   if (f.event_type?.length) c.push(inArray(leads.eventType, f.event_type));
   if (f.owner?.length) {
@@ -214,13 +211,12 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   return and(...c.filter(Boolean)) ?? sql`true`;
 }
 
-/** Human summary of a filter, for headings ("Qualified · Nov 1 – Nov 30"). */
+/** Human summary of a filter, for headings ("Won · Nov 1 – Nov 30"). */
 export function describeFilter(f: LeadFilter): string[] {
   const out: string[] = [];
   const h = (s: string) => s.replace(/_/g, " ");
   if (f.q) out.push(`“${f.q}”`);
   if (f.status) out.push(`status: ${f.status.map(h).join(", ")}`);
-  if (f.qualification) out.push(f.qualification.map(h).join(", "));
   if (f.source) out.push(`source: ${f.source.map(h).join(", ")}`);
   if (f.event_type) out.push(f.event_type.map(h).join(", "));
   if (f.created_from || f.created_to) out.push(`created ${f.created_from ?? "…"} → ${f.created_to ?? "…"}`);

@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
-const FORM_KEYS = new Set(["q", "status", "qualification", "source", "event_type", "owner", "created_from", "created_to", "awaiting"]);
+const FORM_KEYS = new Set(["q", "status", "source", "event_type", "owner", "created_from", "created_to", "awaiting"]);
 
 export default async function LeadsPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -108,7 +108,6 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
           <input id="q" name="q" defaultValue={filter.q ?? ""} placeholder="Name, email, phone, LX-…" className="input" />
         </div>
         <Select name="status" label="Status" value={single(filter.status)} multi={multi(filter.status)} options={STATUSES.map((s) => [s, STATUS_LABELS[s]])} />
-        <Select name="qualification" label="Qualification" value={single(filter.qualification)} multi={multi(filter.qualification)} options={[["qualified", "Qualified"], ["needs_info", "Needs info"], ["unqualified", "Unqualified"]]} />
         <Select name="source" label="Source" value={single(filter.source)} multi={multi(filter.source)} options={SOURCES.map((s) => [s, titleCase(s)])} />
         <Select name="event_type" label="Event type" value={single(filter.event_type)} multi={multi(filter.event_type)} options={EVENT_TYPES.map((s) => [s, titleCase(s)])} />
         <Select name="owner" label="Owner" value={single(filter.owner)} multi={multi(filter.owner)} options={[["me", "Me"], ["unassigned", "Unassigned"], ...users.map((u) => [u.id, u.name] as [string, string])]} />

@@ -97,8 +97,8 @@ async function main() {
         await updateLead(tx, sys, lead.id, { status: "won", quoteValue: value }, { now: closeAt });
       } else if (steps.length && daysAgo > 30 && rand() < 0.45) {
         await updateLead(tx, sys, lead.id, { status: "lost", lostReason: pick(["price", "date_unavailable", "went_with_competitor", "no_response"] as LostReason[]) }, { now: closeAt });
-      } else if (lead.qualification === "unqualified" && rand() < 0.6) {
-        await updateLead(tx, sys, lead.id, { status: "unqualified", unqualifiedReason: lead.qualificationReasons[0] ?? "Not a fit" }, { now: closeAt });
+      } else if ((budget ?? 9999) < 2000 && rand() < 0.6) {
+        await updateLead(tx, sys, lead.id, { status: "unqualified", unqualifiedReason: "Budget too small" }, { now: closeAt });
       } else if (steps.length && rand() < 0.7) {
         await setFollowUp(tx, sys, lead.id, { dueAt: new Date(now.getTime() + (rand() * 6 - 2) * 86400000), note: "Check in" }, closeAt);
       }

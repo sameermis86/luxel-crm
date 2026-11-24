@@ -86,24 +86,13 @@ describe("daily digest", () => {
 });
 
 describe("nightly job", () => {
-  it("requalifies leads whose event drifted inside the minimum lead time and finds new duplicate pairs", async () => {
-    // created Oct 1: event Dec 1 is 61 days out → qualified
-    const lead = await withCtx(env.sys, (tx) =>
-      createLead(tx, env.sys, { firstName: "Eve", lastName: "Stone", email: "eve@example.com", eventType: "wedding", eventDate: "2026-12-01", budgetMax: 9000 }, { now: new Date("2026-10-01T12:00:00Z") }),
-    );
-    expect(lead.qualification).toBe("qualified");
+  it("finds new duplicate pairs", async () => {
     // two leads with the same phone that slipped in without a dedupe check
     const a = await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Fay", lastName: "One", phone: "647-555-0199" }));
     const b = await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Fay", lastName: "Two", phone: "(647) 555 0199" }));
 
-    const r = await runNightly(env.orgId, NOW); // Nov 24: 7 days out, under the 14-day minimum
-    expect(r.requalified).toBeGreaterThanOrEqual(1);
+    const r = await runNightly(env.orgId, NOW);
     expect(r.newCandidates).toBeGreaterThanOrEqual(1);
-
-    const [l] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.id, lead.id)));
-    expect(l.qualification).toBe("unqualified");
-    const q = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "qualified"))));
-    expect(q.some((e) => e.oldValue === "qualified" && e.newValue === "unqualified" && e.actorKind === "system")).toBe(true);
 
     const pair = await withCtx(env.sys, (tx) => tx.select().from(duplicateCandidates).where(eq(duplicateCandidates.leadA, [a.id, b.id].sort()[0])));
     expect(pair[0]).toMatchObject({ confidence: "high", matchReasons: ["same_phone"] });

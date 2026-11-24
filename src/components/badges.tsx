@@ -1,4 +1,4 @@
-import type { Qualification, Status } from "@/db/schema";
+import type { Status } from "@/db/schema";
 import { STATUS_LABELS } from "@/lib/status";
 
 const STATUS_STYLE: Record<Status, string> = {
@@ -15,19 +15,4 @@ const STATUS_STYLE: Record<Status, string> = {
 
 export function StatusPill({ status }: { status: Status }) {
   return <span className={`chip ${STATUS_STYLE[status]}`}>{STATUS_LABELS[status]}</span>;
-}
-
-const Q_STYLE: Record<Qualification, string> = {
-  qualified: "border-stem/40 bg-stem-soft text-stem",
-  needs_info: "border-amber/30 bg-amber-soft text-amber",
-  unqualified: "border-edge bg-paper text-muted",
-};
-export const Q_LABEL: Record<Qualification, string> = { qualified: "Qualified", needs_info: "Needs info", unqualified: "Unqualified" };
-export function QualBadge({ q, override }: { q: Qualification; override?: boolean }) {
-  return (
-    <span className={`chip ${Q_STYLE[q]}`} title={override ? "Manually overridden" : undefined}>
-      {Q_LABEL[q]}
-      {override ? <span aria-label="overridden">*</span> : null}
-    </span>
-  );
 }

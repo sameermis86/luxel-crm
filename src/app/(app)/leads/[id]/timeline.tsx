@@ -20,8 +20,8 @@ const FIELD_LABELS: Record<string, string> = {
   phoneE164: "Phone (E.164)", eventType: "Event type", eventDate: "Event date", venueName: "Venue", venueCity: "Venue city", guestCount: "Guests",
   budgetMin: "Budget min", budgetMax: "Budget max", estimateTotal: "Quote Builder estimate", servicesRequested: "Services", tierInterest: "Tier",
   message: "Message", source: "Source", captureChannel: "Channel", sourceDetail: "Source detail", campaignId: "Campaign", status: "Status",
-  lostReason: "Lost reason", lostReasonDetail: "Lost detail", unqualifiedReason: "Unqualified reason", qualification: "Qualification",
-  qualificationOverride: "Qualification override", qualificationOverrideReason: "Override reason", ownerId: "Owner", nextFollowUpAt: "Next follow-up",
+  lostReason: "Lost reason", lostReasonDetail: "Lost detail", unqualifiedReason: "Unqualified reason",
+  goodshuffleStatus: "Goodshuffle stage", goodshuffleProject: "Goodshuffle project", ownerId: "Owner", nextFollowUpAt: "Next follow-up",
   lastContactedAt: "Last contacted", firstReplyAt: "First reply", quoteValue: "Quote", contractValue: "Contract value", collectedAmount: "Collected",
   contactedAt: "Contacted at", consultScheduledAt: "Consult scheduled at", consultHeldAt: "Consult held at", proposalSentAt: "Proposal sent at",
   wonAt: "Won at", lostAt: "Lost at", furthestStage: "Furthest stage", duplicateOfId: "Merged into", returningInquiry: "Repeat submission",
@@ -41,7 +41,7 @@ function fmtVal(field: string | null, v: string | null, users: Record<string, st
   if (field === "servicesRequested") {
     try { return (JSON.parse(v) as string[]).join(", ") || "none"; } catch { return v; }
   }
-  if (["eventType", "source", "captureChannel", "qualification", "tierInterest", "lostReason"].includes(field)) return human(v);
+  if (["eventType", "source", "captureChannel", "goodshuffleStatus", "tierInterest", "lostReason"].includes(field)) return human(v);
   return v.length > 140 ? v.slice(0, 140) + "…" : v;
 }
 
@@ -99,8 +99,6 @@ export function Timeline({ events: all, users, leadRecordId, showSystem }: { eve
                 <span className="text-muted line-through decoration-muted/50">{fmtVal(e.field, e.oldValue, users)}</span>
                 <span className="mx-1.5 text-muted">→</span>
                 <span>{fmtVal(e.field, e.newValue, users)}</span>
-                {e.field === "qualification" && p.reasons?.length ? <span className="text-muted"> ({p.reasons.join("; ")})</span> : null}
-                {e.field === "qualification" && p.override ? <span className="text-muted"> (override: {p.overrideReason})</span> : null}
               </p>
             )}
             {p.summary ? <p className="mt-0.5 text-sm whitespace-pre-wrap text-ink/90">{p.summary}</p> : null}

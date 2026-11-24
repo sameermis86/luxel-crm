@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import type { Qualification, Status, EventType, Source, LostReason } from "@/db/schema";
+import type { Status, EventType, Source, LostReason } from "@/db/schema";
 import { STATUSES, LOST_REASONS } from "@/db/schema";
-import { QualBadge } from "@/components/badges";
 import { STATUS_LABELS, LOST_REASON_LABELS } from "@/lib/status";
 import { fmtDate, fmtRelative, titleCase } from "@/lib/format";
 import { bulkAction, type ActionResult } from "./actions";
@@ -19,7 +18,6 @@ export interface Row {
   eventType: EventType;
   eventDate: string | null;
   source: Source;
-  qualification: Qualification;
   status: Status;
   ownerName: string | null;
   nextFollowUpAt: string | null;
@@ -34,7 +32,6 @@ const COLS: { key: string; label: string; sort?: string }[] = [
   { key: "name", label: "Name", sort: "name" },
   { key: "event_date", label: "Event", sort: "event_date" },
   { key: "source", label: "Source", sort: "source" },
-  { key: "qualification", label: "Qualification", sort: "qualification" },
   { key: "status", label: "Status", sort: "status" },
   { key: "owner", label: "Owner" },
   { key: "consult", label: "Consultation" },
@@ -147,7 +144,6 @@ export function LeadsTable(props: {
                     <div className="text-xs text-muted">{titleCase(r.eventType)}</div>
                   </td>
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
-                  <td className="td"><QualBadge q={r.qualification} /></td>
                   <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} /></td>
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
                   <td className="td whitespace-nowrap tabular">
