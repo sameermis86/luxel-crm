@@ -14,6 +14,10 @@ import { Timeline } from "./timeline";
 import { EditDetails } from "./edit-details";
 import { CompleteFollowUpButton, DismissDuplicateButton, MarkSeen } from "./small-actions";
 import { PlannerButton, RestoreLeadButton } from "../planner-actions";
+import { SmsOptOutToggle, TextComposer } from "../text-composer";
+import { lastTexts } from "@/server/sms";
+import { smsEligibility, textable } from "@/lib/sms";
+import { MessageSquareText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,18 +28,19 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const tl = (["all", "activities", "changes"].includes(sp.tl ?? "") ? sp.tl : "all") as TimelineFilter;
   const data = await withPage(async (tx) => {
     const detail = await getLeadDetail(tx, id);
-    if (!detail) return { detail: null, timeline: [], users: [] };
-    const [timeline, users] = await Promise.all([getTimeline(tx, id, tl), listUsers(tx)]);
-    return { detail, timeline, users };
+    if (!detail) return { detail: null, timeline: [], users: [], lastText: null };
+    const [timeline, users, texts] = await Promise.all([getTimeline(tx, id, tl), listUsers(tx), lastTexts(tx, [id])]);
+    return { detail, timeline, users, lastText: texts.get(id) ?? null };
   });
   if (!data.detail) notFound();
-  const { detail, timeline, users, page } = data;
+  const { detail, timeline, users, lastText, page } = data;
   const { lead, owner, mergedInto, mergedChildren, followUps, duplicates } = detail;
   const readOnly = !!lead.duplicateOfId || !!lead.archivedAt;
   const openFollowUps = followUps.filter((f) => !f.f.doneAt);
   const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status);
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
   const isOwner = can(page.session, "settings:manage");
+  const sms = textable(detail.lead.phoneE164) ? smsEligibility(detail.lead, page.now, { ...page.settings.sms, minDaysBetween: 0 }, lastText) : ({ ok: false, reason: "No Canadian/US mobile number" } as const);
   const archiveEvent = lead.archivedAt ? [...timeline].sort((a, b) => b.e.seq - a.e.seq).find((t) => t.e.field === "archivedAt" && t.e.newValue)?.e : null;
   const archiveVia = (archiveEvent?.payload as { via?: string; entry?: string } | null) ?? null;
   const archiveWhy = !archiveEvent ? null : archiveVia?.via === "planner" ? `marked as a planner/partner (${archiveVia.entry})` : "import undone";
@@ -107,6 +112,24 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             suggestedFollowUp={toLocalInput(suggested)}
             quoteValue={lead.quoteValue}
           />
+        )}
+        {!readOnly && lead.phoneE164 && (
+          <details className="card mt-4 max-w-2xl p-4 [&[open]>summary]:mb-3">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-medium"><MessageSquareText size={15} strokeWidth={1.75} className="text-muted" aria-hidden /> Text reminder</span>
+              <span className="text-xs text-muted">{lastText ? `Last texted ${fmtRelative(lastText, page.now)}` : "Never texted"}{!sms.ok ? ` · ${sms.reason}` : ""}</span>
+            </summary>
+            {sms.ok ? (
+              <TextComposer
+                lead={{ id: lead.id, firstName: lead.firstName, phoneE164: lead.phoneE164, status: lead.status, eventType: lead.eventType, eventDate: lead.eventDate, venueName: lead.venueName }}
+                templates={page.settings.sms.templates}
+                senderName={page.settings.sms.senderName}
+              />
+            ) : (
+              <p className="text-sm text-muted">Can&apos;t text: {sms.reason.toLowerCase()}.</p>
+            )}
+            <div className="mt-3 border-t border-edge pt-3"><SmsOptOutToggle leadId={lead.id} optedOut={!!lead.smsOptOutAt} /></div>
+          </details>
         )}
       </header>
 

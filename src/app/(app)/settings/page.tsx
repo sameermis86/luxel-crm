@@ -67,6 +67,31 @@ export default async function SettingsPage() {
           <p className="mt-2 text-xs text-muted">Times are {s.businessHours.timezone}. The digest schedule itself is set in the job definition (08:00).</p>
         </section>
 
+        {/* SMS reminders */}
+        <section className="card p-5" id="sms">
+          <h2 className="text-[19px]">Text reminders</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            Texts go out from the office iPhone (Texts to send, or Text reminder on a lead). Placeholders: <code>{"{first_name}"}</code> <code>{"{event}"}</code>{" "}
+            <code>{"{event_date}"}</code> <code>{"{venue}"}</code> <code>{"{sender}"}</code>. Every text names the sender and ends with &ldquo;Reply STOP to opt out.&rdquo;
+            Leads who inquired more than {Math.round(s.sms.consentDays / 30)} months ago aren&apos;t offered (Canada&apos;s anti-spam law).
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-4">
+            <label className="block"><span className="label">Signed as</span><input name="sms.senderName" defaultValue={s.sms.senderName} className="input w-72" /></label>
+            <N name="sms.minDaysBetween" value={s.sms.minDaysBetween} label="Days between texts to a lead" w="w-28" />
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {[...s.sms.templates, { label: "", body: "" }].slice(0, 6).map((t, i) => (
+              <div key={i} className="rounded-[var(--radius-control)] border border-edge p-3">
+                <label className="block"><span className="label">{t.body ? `Template ${i + 1}` : "Add a template"}</span>
+                  <input name={`sms.templates.${i}.label`} defaultValue={t.label} placeholder="Name, e.g. Quote follow-up" className="input" />
+                </label>
+                <textarea name={`sms.templates.${i}.body`} defaultValue={t.body} rows={3} placeholder="Hi {first_name}, it's {sender}…" className="input mt-2 text-[13px]" aria-label={`Template ${i + 1} text`} />
+              </div>
+            ))}
+          </div>
+          <p className="hint">Clear a template&apos;s text to remove it.</p>
+        </section>
+
         {/* Planners & partners */}
         <section className="card p-5" id="planners">
           <h2 className="text-[19px]">Planners &amp; partners</h2>

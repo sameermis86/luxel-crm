@@ -105,7 +105,7 @@ export async function getLeadDetail(tx: Tx, leadId: string) {
 }
 
 export type TimelineFilter = "all" | "activities" | "changes";
-const ACTIVITY_TYPES = ["created", "imported", "note_added", "call_logged", "email_logged", "meeting_logged", "follow_up_set", "follow_up_done", "returning_inquiry", "merged", "converted"] as const;
+const ACTIVITY_TYPES = ["created", "imported", "note_added", "call_logged", "email_logged", "meeting_logged", "text_logged", "follow_up_set", "follow_up_done", "returning_inquiry", "merged", "converted"] as const;
 
 /**
  * Timeline: this lead's events plus those of any leads merged into it (events

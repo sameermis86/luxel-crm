@@ -66,8 +66,35 @@ export const mailboxSchema = z.object({
   followUpGraceHours: z.number().min(0).default(12),
 });
 
+function DEFAULT_SMS() {
+  return {
+    senderName: "Luxel Decor & Flowers",
+    consentDays: 183,
+    minDaysBetween: 3,
+    templates: [
+      { label: "Check in", body: "Hi {first_name}, it's {sender}. Just checking in on your {event}{event_date}. Do you have any questions we can help with?" },
+      { label: "Quote follow-up", body: "Hi {first_name}, it's {sender}. Did you get a chance to look at the quote for your {event}{event_date}? Happy to walk you through it or adjust anything." },
+      { label: "Book a consultation", body: "Hi {first_name}, it's {sender}. We'd love to show you ideas for your {event}{venue}. Would a quick call or a studio visit this week work for you?" },
+      { label: "Last check", body: "Hi {first_name}, it's {sender}. We haven't heard back, so we'll close your file for now. If your {event} plans are still on, just reply and we'll pick it up." },
+    ],
+  };
+}
+
+export const smsTemplateSchema = z.object({ label: z.string().trim().min(1).max(60), body: z.string().trim().min(1).max(640) });
+export const smsSchema = z.object({
+  /** who the text says it's from (CASL: identify the sender), e.g. "Mansi from Luxel Decor" */
+  senderName: z.string().trim().min(1).max(80).default("Luxel Decor & Flowers"),
+  /** CASL implied consent from an inquiry lasts 6 months: no texts to leads who inquired longer ago */
+  consentDays: z.number().int().min(1).max(730).default(183),
+  /** at most one text per lead in this many days */
+  minDaysBetween: z.number().int().min(0).default(3),
+  /** placeholders: {first_name} {event} {event_date} {venue} {sender}. "Reply STOP to opt out." is added if missing */
+  templates: z.array(smsTemplateSchema).min(1),
+});
+
 export const settingsSchema = z.object({
   businessHours: businessHoursSchema,
+  sms: smsSchema.default(DEFAULT_SMS()),
   mailbox: mailboxSchema.default({ backfillDays: 700, batchSize: 1500, followUpGraceHours: 12 }),
   setmore: setmoreSchema.default({ proposalServices: ["existing booking", "quote review"], excludeContacts: [] }),
   ops: opsSchema.default({ setupSteps: [], teardownSteps: [], keepDaysAfter: 14 }),
@@ -92,6 +119,7 @@ export const DEFAULT_SERVICE_AREA = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
+  sms: DEFAULT_SMS(),
   mailbox: { backfillDays: 700, batchSize: 1500, followUpGraceHours: 12 },
   setmore: { proposalServices: ["existing booking", "quote review"], excludeContacts: [] },
 

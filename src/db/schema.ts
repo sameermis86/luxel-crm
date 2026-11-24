@@ -66,6 +66,7 @@ export const EVENT_KINDS = [
   "call_logged",
   "email_logged",
   "meeting_logged",
+  "text_logged", // SMS sent from the office phone (one-tap, logged on "Mark as sent")
   "follow_up_set",
   "follow_up_done",
   "merged",
@@ -182,6 +183,8 @@ export const leads = pgTable(
 
     eventType: eventTypeEnum("event_type").notNull().default("other"),
     eventDate: date("event_date"),
+    /** they asked not to be texted (replied STOP): no more SMS reminders */
+    smsOptOutAt: ts("sms_opt_out_at"),
     venueName: text("venue_name"),
     venueCity: text("venue_city"),
     guestCount: integer("guest_count"),

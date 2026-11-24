@@ -46,7 +46,7 @@ function fmtVal(field: string | null, v: string | null, users: Record<string, st
 }
 
 const ICON: Record<string, string> = {
-  created: "✦", imported: "⇣", call_logged: "☏", email_logged: "✉", meeting_logged: "◷", note_added: "✎", follow_up_set: "⏲", follow_up_done: "✓",
+  created: "✦", imported: "⇣", call_logged: "☏", email_logged: "✉", meeting_logged: "◷", text_logged: "✆", note_added: "✎", follow_up_set: "⏲", follow_up_done: "✓",
   status_changed: "→", assigned: "◉", scored: "#", qualified: "◆", field_changed: "·", merged: "⇄", converted: "★", returning_inquiry: "↺", archived: "▢",
 };
 
@@ -62,6 +62,7 @@ function title(e: TimelineEvent, users: Record<string, string>) {
     }
     case "call_logged": return `Call ${p.direction === "inbound" ? "received" : "made"}${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "email_logged": return `Email ${p.direction === "inbound" ? "received" : "sent"}${p.outcome ? ` · ${p.outcome}` : ""}`;
+    case "text_logged": return "Text sent from the office phone";
     case "meeting_logged": return `Meeting${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "note_added": return "Note";
     case "follow_up_done": return `Follow-up done${p.reason ? ` (${p.reason})` : p.viaActivity ? ` (by logging a ${p.viaActivity})` : ""}`;

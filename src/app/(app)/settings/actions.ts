@@ -38,18 +38,26 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
     authorize(session, "settings:manage");
     const next: any = structuredClone(DEFAULT_SETTINGS);
     next.businessHours.days = [];
+    const smsTemplates: { label: string; body: string }[] = [];
     for (const [k, raw] of fd.entries()) {
       if (k.startsWith("$") || typeof raw !== "string") continue;
       if (k === "businessHours.timezone") {
         next.businessHours.timezone = raw;
       } else if (k === "businessHours.days") {
         next.businessHours.days.push(Number(raw)); // one checkbox per working day
+      } else if (k === "sms.senderName") {
+        next.sms.senderName = raw.trim();
+      } else if (k.startsWith("sms.templates.")) {
+        const [, , i, field] = k.split(".");
+        smsTemplates[Number(i)] = { ...(smsTemplates[Number(i)] ?? { label: "", body: "" }), [field]: raw.trim() };
       } else if (k === "setmore.excludeContacts") {
         next.setmore.excludeContacts = parseContactList(raw);
       } else if (raw.trim() !== "") {
         setPath(next, k, Number(raw.replace(/[$,]/g, "")));
       }
     }
+    const filled = smsTemplates.filter((t) => t && t.body);
+    if (filled.length) next.sms.templates = filled.map((t, i) => ({ label: t.label || `Template ${i + 1}`, body: t.body }));
     const parsed = settingsSchema.parse(next);
     const ctx = ctxFor(session);
     await withCtx(ctx, (tx) =>

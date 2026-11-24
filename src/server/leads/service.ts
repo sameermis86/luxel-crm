@@ -61,6 +61,7 @@ export const leadFieldsSchema = z.object({
   ownerId: z.string().uuid().nullable(),
   nextFollowUpAt: z.date().nullable(),
   lastContactedAt: z.date().nullable(),
+  smsOptOutAt: z.date().nullable(),
   firstReplyAt: z.date().nullable(),
   quoteValue: money.nullable(),
 });
@@ -339,7 +340,7 @@ export async function updateLead(
 /* -------------------------------------------------------------------------- */
 
 export const activitySchema = z.object({
-  kind: z.enum(["call", "email", "meeting", "note"]),
+  kind: z.enum(["call", "email", "meeting", "note", "text"]),
   direction: z.enum(["outbound", "inbound"]).default("outbound"),
   summary: z.string().trim().max(10000).default(""),
   outcome: z.string().trim().max(200).optional(),
@@ -347,7 +348,7 @@ export const activitySchema = z.object({
 });
 export type ActivityInput = z.input<typeof activitySchema>;
 
-const ACTIVITY_EVENT = { call: "call_logged", email: "email_logged", meeting: "meeting_logged", note: "note_added" } as const;
+const ACTIVITY_EVENT = { call: "call_logged", email: "email_logged", meeting: "meeting_logged", note: "note_added", text: "text_logged" } as const;
 
 /**
  * Log a call/email/meeting/note. Outbound contact on a `new` lead moves it to

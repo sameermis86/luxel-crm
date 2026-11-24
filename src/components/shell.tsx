@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine, Bell, CalendarCheck2, CalendarRange, ChevronsUpDown, Flower2, LayoutDashboard, LogOut, Menu, Plus,
   Settings, Truck, Users, X, Handshake, type LucideIcon,
+  MessageSquareText,
 } from "lucide-react";
 
 /** Luxel's divisions. The CRM is Sales & CRM; Fulfillment & Ops runs signed events; Floral orders is next. */
@@ -35,6 +36,7 @@ function sectionsFor(division: string, p: Pick<ShellProps, "canImport" | "canSet
     { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/follow-ups", label: "My follow-ups", icon: CalendarCheck2 },
+    { href: "/texts", label: "Texts to send", icon: MessageSquareText },
     { href: "/imports", label: "Import", icon: ArrowDownToLine, show: p.canImport },
     { href: "/settings", label: "Settings", icon: Settings, show: p.canSettings },
   ].filter((s) => s.show !== false);

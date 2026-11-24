@@ -469,3 +469,56 @@ export async function restoreLeadAction(leadId: string): Promise<ActionResult> {
   }
   return res.ok ? { ok: true, message: "Lead restored" } : res;
 }
+
+/* ----------------------------- SMS (one-tap from the office phone) ---------------------------- */
+
+/**
+ * "Mark as sent": logs the text on the lead (counts as contact: New → Contacted, closes follow-ups
+ * due now) and, if nothing is planned next, sets the default follow-up for its stage.
+ * Re-checks eligibility so an opted-out or out-of-consent lead can't be logged as texted.
+ */
+export async function logTextAction(leadId: string, body: string): Promise<ActionResult> {
+  const session = await requireSession();
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const id = z.string().uuid().parse(leadId);
+    const text = z.string().trim().min(1, "The message is empty").max(1000).parse(body);
+    const ctx = ctxFor(session);
+    await withCtx(ctx, async (tx) => {
+      const s = await getSettings(tx, ctx.orgId);
+      const [l] = await tx.select().from(leads).where(eq(leads.id, id));
+      if (!l) throw new LeadError("Lead not found");
+      const { smsEligibility } = await import("@/lib/sms");
+      const { lastTexts } = await import("@/server/sms");
+      // the min-days gap is a guide for the queue; a person sending by hand may override it
+      const e = smsEligibility(l, new Date(), { ...s.sms, minDaysBetween: 0 }, (await lastTexts(tx, [id])).get(id) ?? null);
+      if (!e.ok) throw new LeadError(e.reason);
+      const { lead } = await logActivity(tx, ctx, id, { kind: "text", direction: "outbound", summary: text });
+      if (!lead.nextFollowUpAt && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status)) {
+        await setFollowUp(tx, ctx, id, { dueAt: suggestNextFollowUp(lead.status, new Date(), s.followUps), note: "After text reminder" });
+      }
+    });
+  });
+  if (res.ok) {
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/texts");
+    revalidatePath("/follow-ups");
+  }
+  return res.ok ? { ok: true, message: "Text logged" } : res;
+}
+
+/** They replied STOP (or asked by phone): never text again. Reversible by an owner/manager if they opt back in. */
+export async function setSmsOptOutAction(leadId: string, optOut: boolean): Promise<ActionResult> {
+  const session = await requireSession();
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const id = z.string().uuid().parse(leadId);
+    const ctx = ctxFor(session);
+    await withCtx(ctx, (tx) => updateLead(tx, ctx, id, { smsOptOutAt: optOut ? new Date() : null }));
+  });
+  if (res.ok) {
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/texts");
+  }
+  return res.ok ? { ok: true, message: optOut ? "Won't be texted again" : "Texts allowed again" } : res;
+}

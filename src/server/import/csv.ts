@@ -205,7 +205,7 @@ export async function commitImport(tx: Tx, ctx: Ctx, raws: Record<string, string
   return { batchId: batch.id, created, merged, skipped, errors };
 }
 
-const EDIT_TYPES = ["note_added", "call_logged", "email_logged", "meeting_logged", "follow_up_set", "follow_up_done", "status_changed", "field_changed", "assigned", "merged", "returning_inquiry"] as const;
+const EDIT_TYPES = ["note_added", "call_logged", "email_logged", "meeting_logged", "text_logged", "follow_up_set", "follow_up_done", "status_changed", "field_changed", "assigned", "merged", "returning_inquiry"] as const;
 
 /** Edited since import = any user/webhook activity on a lead from this batch after the batch ran. */
 export async function batchEditedLeads(tx: Tx, ctx: Ctx, batchId: string) {
