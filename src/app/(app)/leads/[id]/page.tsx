@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
 import { getLeadDetail, getTimeline, listUsers, type TimelineFilter } from "@/server/leads/queries";
-import { StatusPill, ScoreBadge, QualBadge } from "@/components/badges";
-import { scoreBand, FACTOR_LABELS, type ScoreBreakdown, type Factor } from "@/lib/scoring";
+import { StatusPill, QualBadge } from "@/components/badges";
 import { MATCH_REASON_LABELS, type MatchReason } from "@/lib/duplicates";
 import { LOST_REASON_LABELS, STATUS_LABELS, TRANSITIONS } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, fmtRelative, fullName, titleCase, toLocalInput } from "@/lib/format";
@@ -30,9 +29,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   if (!data.detail) notFound();
   const { detail, timeline, users, page } = data;
   const { lead, owner, mergedInto, mergedChildren, followUps, duplicates } = detail;
-  const band = scoreBand(lead.score, page.settings.scoring);
   const readOnly = !!lead.duplicateOfId || !!lead.archivedAt;
-  const breakdown = lead.scoreBreakdown as ScoreBreakdown;
   const openFollowUps = followUps.filter((f) => !f.f.doneAt);
   const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified"].includes(lead.status);
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
@@ -75,7 +72,6 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <StatusPill status={lead.status} />
-              <ScoreBadge score={lead.score} band={band} />
               <QualBadge q={lead.qualification} override={lead.qualificationOverride} />
               <span className="text-muted">·</span>
               <span>{owner ? <>Owner: <strong className="font-medium">{owner.name}</strong></> : <span className="text-bloom">Unassigned</span>}</span>
@@ -133,25 +129,11 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
         {/* Sidebar */}
         <aside className="space-y-4">
           <section className="card p-4">
-            <h2 className="mb-2 text-lg">Score breakdown <span className="tabular text-muted">{lead.score}/100</span></h2>
-            <ul className="space-y-1.5 text-sm">
-              {(Object.keys(FACTOR_LABELS) as Factor[]).map((k) => {
-                const f = breakdown?.[k];
-                if (!f) return null;
-                return (
-                  <li key={k}>
-                    <div className="flex justify-between gap-2">
-                      <span>{FACTOR_LABELS[k]} <span className="tabular text-muted">{f.points}/{f.max}</span></span>
-                      <span className="truncate text-right text-muted">{f.label}</span>
-                    </div>
-                    <div className="mt-0.5 h-1 rounded bg-paper"><div className="h-1 rounded bg-stem" style={{ width: `${(f.points / Math.max(f.max, 1)) * 100}%` }} /></div>
-                  </li>
-                );
-              })}
-            </ul>
+            <h2 className="mb-2 text-lg">Qualification</h2>
+            <QualBadge q={lead.qualification} override={lead.qualificationOverride} />
             {lead.qualificationReasons.length > 0 && (
-              <div className="mt-3 border-t border-edge pt-2 text-sm">
-                <p className="label">Qualification notes</p>
+              <div className="mt-2 text-sm">
+                <p className="label">Notes</p>
                 <ul className="list-disc pl-4 text-muted">{lead.qualificationReasons.map((r) => <li key={r}>{r}</li>)}</ul>
               </div>
             )}

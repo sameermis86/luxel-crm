@@ -51,7 +51,7 @@ describe("POST /api/intake/wix", () => {
     expect((await post(quote("x1"), "bad")).status).toBe(401);
   });
 
-  it("acceptance: a Quote Builder submission becomes a scored, assigned lead with a follow-up", async () => {
+  it("acceptance: a Quote Builder submission becomes a qualified, assigned lead with a follow-up", async () => {
     const t0 = Date.now();
     const res = await post(quote("qb-1"));
     const json = await res.json();
@@ -63,7 +63,6 @@ describe("POST /api/intake/wix", () => {
     expect(lead.recordId).toMatch(/^LX-\d{6}$/);
     expect(lead.source).toBe("google_ads"); // origin from UTM
     expect(lead.captureChannel).toBe("quote_builder"); // channel from form
-    expect(lead.score).toBeGreaterThan(0);
     expect(lead.qualification).toBe("qualified");
     expect([env.sameer.id, env.mansi.id]).toContain(lead.ownerId);
     expect(lead.nextFollowUpAt).toBeTruthy();

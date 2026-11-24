@@ -6,38 +6,9 @@ import { EVENT_TYPES, SOURCES } from "@/db/schema";
  * per org in Settings (stored in org_settings.settings, deep-merged over these).
  */
 
-const pointsByKey = <T extends readonly string[]>(keys: T) =>
-  z.object(Object.fromEntries(keys.map((k) => [k, z.number().min(0).max(100)])) as Record<T[number], z.ZodNumber>);
-
-export const scoringSchema = z.object({
-  max: z.object({
-    eventFit: z.number(),
-    budget: z.number(),
-    timing: z.number(),
-    sourceIntent: z.number(),
-    contactability: z.number(),
-    engagement: z.number(),
-  }),
-  eventFit: pointsByKey(EVENT_TYPES),
-  /** Budget bands, checked top-down: first band whose `min` the budget reaches wins. */
-  budgetBands: z.array(z.object({ min: z.number(), points: z.number() })),
-  budgetUnknown: z.number(),
-  /** Timing bands in months until the event, checked top-down. */
-  timing: z.object({
-    past: z.number(),
-    unknown: z.number(),
-    bands: z.array(z.object({ minMonths: z.number(), maxMonths: z.number(), points: z.number() })),
-  }),
-  sourceIntent: pointsByKey(SOURCES),
-  contactability: z.object({ both: z.number(), one: z.number(), none: z.number() }),
-  engagement: z.object({ replied: z.number(), consult: z.number() }),
-  bands: z.object({ hot: z.number(), warm: z.number() }),
-});
-
 export const qualificationSchema = z.object({
   minBudget: z.number(),
   minLeadTimeDays: z.number(),
-  qualifiedMinScore: z.number(),
   requireEventDateForQualified: z.boolean(),
   serviceArea: z.array(z.string()),
 });
@@ -67,7 +38,6 @@ export const utmRuleSchema = z.object({
 });
 
 export const settingsSchema = z.object({
-  scoring: scoringSchema,
   qualification: qualificationSchema,
   businessHours: businessHoursSchema,
   followUps: followUpSchema,
@@ -76,7 +46,6 @@ export const settingsSchema = z.object({
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
-export type ScoringConfig = Settings["scoring"];
 export type QualificationConfig = Settings["qualification"];
 
 /** GTA + Golden Horseshoe, including the neighbourhood / former-municipality names people actually type. */
@@ -93,51 +62,9 @@ export const DEFAULT_SERVICE_AREA = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
-  scoring: {
-    max: { eventFit: 25, budget: 25, timing: 15, sourceIntent: 15, contactability: 10, engagement: 10 },
-    eventFit: { wedding: 25, corporate: 20, social: 15, rental_only: 8, other: 5 },
-    budgetBands: [
-      { min: 10000, points: 25 },
-      { min: 6000, points: 20 },
-      { min: 3500, points: 14 },
-      { min: 2000, points: 7 },
-      { min: 0, points: 0 },
-    ],
-    budgetUnknown: 8,
-    timing: {
-      past: 0,
-      unknown: 5,
-      bands: [
-        { minMonths: 4, maxMonths: 14, points: 15 },
-        { minMonths: 2, maxMonths: 4, points: 10 },
-        { minMonths: 14, maxMonths: Number.MAX_SAFE_INTEGER, points: 8 },
-        { minMonths: 0, maxMonths: 2, points: 4 },
-      ],
-    },
-    sourceIntent: {
-      referral: 15,
-      venue_partner: 15,
-      quote_builder: 12,
-      phone: 10,
-      google_ads: 9,
-      google_business_profile: 9,
-      contact_us_form: 8,
-      wedding_show: 8,
-      instagram: 6,
-      facebook: 6,
-      organic_search: 5,
-      email: 5,
-      walk_in: 5,
-      other: 5,
-    },
-    contactability: { both: 10, one: 5, none: 0 },
-    engagement: { replied: 5, consult: 5 },
-    bands: { hot: 70, warm: 45 },
-  },
   qualification: {
     minBudget: 2000,
     minLeadTimeDays: 14,
-    qualifiedMinScore: 50,
     requireEventDateForQualified: true,
     serviceArea: DEFAULT_SERVICE_AREA,
   },

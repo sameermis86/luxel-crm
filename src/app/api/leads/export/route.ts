@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
       budget_max: r.budgetMax,
       source: r.source,
       capture_channel: r.captureChannel,
-      score: r.score,
       qualification: r.qualification,
       status: r.status,
       owner: r.ownerName,

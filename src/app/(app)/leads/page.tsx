@@ -107,7 +107,6 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
         sort={params.sort}
         dir={params.dir}
         query={query}
-        bands={page.settings.scoring.bands}
         users={users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name }))}
         canBulk={can(page.session, "leads:bulk")}
         total={total}

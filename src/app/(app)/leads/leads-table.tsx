@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { Qualification, Status, EventType, Source, LostReason } from "@/db/schema";
 import { STATUSES, LOST_REASONS } from "@/db/schema";
-import { ScoreBadge, QualBadge } from "@/components/badges";
+import { QualBadge } from "@/components/badges";
 import { STATUS_LABELS, LOST_REASON_LABELS } from "@/lib/status";
 import { fmtDate, fmtRelative, titleCase } from "@/lib/format";
 import { bulkAction, type ActionResult } from "./actions";
@@ -19,7 +19,6 @@ export interface Row {
   eventType: EventType;
   eventDate: string | null;
   source: Source;
-  score: number;
   qualification: Qualification;
   status: Status;
   ownerName: string | null;
@@ -34,7 +33,6 @@ const COLS: { key: string; label: string; sort?: string }[] = [
   { key: "name", label: "Name", sort: "name" },
   { key: "event_date", label: "Event", sort: "event_date" },
   { key: "source", label: "Source", sort: "source" },
-  { key: "score", label: "Score", sort: "score" },
   { key: "qualification", label: "Qualification", sort: "qualification" },
   { key: "status", label: "Status", sort: "status" },
   { key: "owner", label: "Owner" },
@@ -46,17 +44,15 @@ export function LeadsTable(props: {
   sort: string;
   dir: "asc" | "desc";
   query: string;
-  bands: { hot: number; warm: number };
   users: { id: string; name: string }[];
   canBulk: boolean;
   total: number;
   nowIso: string;
 }) {
-  const { rows, sort, dir, query, bands } = props;
+  const { rows, sort, dir, query } = props;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   const now = new Date(props.nowIso);
-  const band = (s: number) => (s >= bands.hot ? "hot" : s >= bands.warm ? "warm" : "cold") as "hot" | "warm" | "cold";
   const sortHref = (key: string) => {
     const s = new URLSearchParams(query);
     s.set("sort", key);
@@ -150,7 +146,6 @@ export function LeadsTable(props: {
                     <div className="text-xs text-muted">{titleCase(r.eventType)}</div>
                   </td>
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
-                  <td className="td"><ScoreBadge score={r.score} band={band(r.score)} /></td>
                   <td className="td"><QualBadge q={r.qualification} /></td>
                   <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} /></td>
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>

@@ -20,7 +20,7 @@ const FIELD_LABELS: Record<string, string> = {
   phoneE164: "Phone (E.164)", eventType: "Event type", eventDate: "Event date", venueName: "Venue", venueCity: "Venue city", guestCount: "Guests",
   budgetMin: "Budget min", budgetMax: "Budget max", estimateTotal: "Quote Builder estimate", servicesRequested: "Services", tierInterest: "Tier",
   message: "Message", source: "Source", captureChannel: "Channel", sourceDetail: "Source detail", campaignId: "Campaign", status: "Status",
-  lostReason: "Lost reason", lostReasonDetail: "Lost detail", unqualifiedReason: "Unqualified reason", score: "Score", qualification: "Qualification",
+  lostReason: "Lost reason", lostReasonDetail: "Lost detail", unqualifiedReason: "Unqualified reason", qualification: "Qualification",
   qualificationOverride: "Qualification override", qualificationOverrideReason: "Override reason", ownerId: "Owner", nextFollowUpAt: "Next follow-up",
   lastContactedAt: "Last contacted", firstReplyAt: "First reply", quoteValue: "Quote", contractValue: "Contract value", collectedAmount: "Collected",
   contactedAt: "Contacted at", consultScheduledAt: "Consult scheduled at", consultHeldAt: "Consult held at", proposalSentAt: "Proposal sent at",

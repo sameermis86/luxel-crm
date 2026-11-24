@@ -1,7 +1,6 @@
 import type { Qualification } from "@/db/schema";
 import type { QualificationConfig } from "./config/defaults";
 import { isValidEmail, isValidPhone, normalizeCity } from "./normalize";
-import { budgetForScoring } from "./scoring";
 import { dateInTz, daysBetween } from "./dates";
 
 export interface QualificationInput {
@@ -25,7 +24,6 @@ const money = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
 export function qualify(
   lead: QualificationInput,
-  score: number,
   cfg: QualificationConfig,
   now: Date = new Date(),
 ): { qualification: Qualification; reasons: string[] } {
@@ -38,7 +36,7 @@ export function qualify(
     else if (days < cfg.minLeadTimeDays) hard.push(`Event is ${days} days out (minimum ${cfg.minLeadTimeDays})`);
   }
 
-  const budget = budgetForScoring(lead);
+  const budget = lead.budgetMax ?? lead.budgetMin ?? lead.estimateTotal;
   // Only a stated budget can disqualify; a Quote Builder estimate reflects what they picked, not what they can spend.
   const stated = lead.budgetMax ?? lead.budgetMin;
   if (stated != null && stated < cfg.minBudget) hard.push(`Budget ${money(stated)} is below ${money(cfg.minBudget)}`);
@@ -51,8 +49,9 @@ export function qualify(
 
   if (!lead.eventDate) info.push("No event date");
   if (!budget) info.push("No budget");
-  if (score < cfg.qualifiedMinScore) info.push(`Score ${score} is below ${cfg.qualifiedMinScore}`);
 
-  const qualified = score >= cfg.qualifiedMinScore && (!cfg.requireEventDateForQualified || !!lead.eventDate);
-  return qualified ? { qualification: "qualified", reasons: [] } : { qualification: "needs_info", reasons: info };
+  // Nothing rules it out: qualified, unless an event date is required and missing.
+  // A missing budget is noted but doesn't hold a lead back.
+  const qualified = !cfg.requireEventDateForQualified || !!lead.eventDate;
+  return qualified ? { qualification: "qualified", reasons: info } : { qualification: "needs_info", reasons: info };
 }

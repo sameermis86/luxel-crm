@@ -17,17 +17,6 @@ export function StatusPill({ status }: { status: Status }) {
   return <span className={`chip ${STATUS_STYLE[status]}`}>{STATUS_LABELS[status]}</span>;
 }
 
-export function ScoreBadge({ score, band }: { score: number; band: "hot" | "warm" | "cold" }) {
-  const style =
-    band === "hot" ? "border-bloom bg-bloom text-white" : band === "warm" ? "border-amber/40 bg-amber-soft text-amber" : "border-edge bg-paper text-muted";
-  return (
-    <span className={`chip tabular ${style}`} title={`Score ${score} (${band})`}>
-      {score}
-      <span className="font-normal opacity-80">{band}</span>
-    </span>
-  );
-}
-
 const Q_STYLE: Record<Qualification, string> = {
   qualified: "border-stem/40 bg-stem-soft text-stem",
   needs_info: "border-amber/30 bg-amber-soft text-amber",

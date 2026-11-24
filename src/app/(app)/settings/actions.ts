@@ -54,8 +54,6 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
         setPath(next, k, Number(raw.replace(/[$,]/g, "")));
       }
     }
-    next.scoring.budgetBands = next.scoring.budgetBands.filter(Boolean).sort((a: any, b: any) => b.min - a.min);
-    next.scoring.timing.bands = next.scoring.timing.bands.filter(Boolean);
     const parsed = settingsSchema.parse(next);
     const ctx = ctxFor(session);
     await withCtx(ctx, (tx) =>
@@ -65,7 +63,7 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
         .onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: parsed, updatedBy: session.userId, updatedAt: new Date() } }),
     );
     revalidatePath("/settings");
-    return { ok: true, message: "Settings saved. Scores update as leads change and nightly; use “Recompute all scores now” to apply immediately." };
+    return { ok: true, message: "Settings saved. Qualification updates as leads change and nightly; use “Recheck qualification now” to apply immediately." };
   } catch (e) {
     return fail(e);
   }
@@ -84,13 +82,13 @@ export async function resetSettingsAction(): Promise<R> {
   }
 }
 
-export async function recomputeScoresAction(): Promise<R> {
+export async function recheckQualificationAction(): Promise<R> {
   const session = await requireSession();
   try {
     authorize(session, "settings:manage");
     const r = await runNightly(session.orgId);
     revalidatePath("/");
-    return { ok: true, message: `Checked ${r.checked} open leads, ${r.rescored} changed, ${r.newCandidates} new possible duplicates` };
+    return { ok: true, message: `Checked ${r.checked} open leads, ${r.requalified} changed, ${r.newCandidates} new possible duplicates` };
   } catch (e) {
     return fail(e);
   }
@@ -143,7 +141,6 @@ const ruleSchema = z.object({
   priority: z.coerce.number().int().min(0).max(100000),
   sources: z.array(z.enum(SOURCES)),
   eventTypes: z.array(z.enum(EVENT_TYPES)),
-  scoreBands: z.array(z.enum(["hot", "warm", "cold"])),
   budgetMin: z.number().nullable(),
   budgetMax: z.number().nullable(),
   venuePartners: z.array(z.string()),
@@ -166,7 +163,6 @@ export async function saveRuleAction(_: R | null, fd: FormData): Promise<R> {
       priority: fd.get("priority"),
       sources: fd.getAll("sources"),
       eventTypes: fd.getAll("eventTypes"),
-      scoreBands: fd.getAll("scoreBands"),
       budgetMin: n("budgetMin"),
       budgetMax: n("budgetMax"),
       venuePartners: String(fd.get("venuePartners") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
@@ -177,7 +173,6 @@ export async function saveRuleAction(_: R | null, fd: FormData): Promise<R> {
     const conditions: Record<string, unknown> = {};
     if (r.sources.length) conditions.sources = r.sources;
     if (r.eventTypes.length) conditions.eventTypes = r.eventTypes;
-    if (r.scoreBands.length) conditions.scoreBands = r.scoreBands;
     if (r.budgetMin != null) conditions.budgetMin = r.budgetMin;
     if (r.budgetMax != null) conditions.budgetMax = r.budgetMax;
     if (r.venuePartners.length) conditions.venuePartners = r.venuePartners;

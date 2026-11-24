@@ -58,7 +58,7 @@ export const EVENT_KINDS = [
   "field_changed",
   "status_changed",
   "assigned",
-  "scored",
+  "scored", // historical only: scoring was removed (no new events)
   "qualified",
   "note_added",
   "call_logged",
@@ -207,8 +207,6 @@ export const leads = pgTable(
     lostReasonDetail: text("lost_reason_detail"),
     unqualifiedReason: text("unqualified_reason"),
 
-    score: integer("score").notNull().default(0),
-    scoreBreakdown: jsonb("score_breakdown").notNull().default({}),
     qualification: qualificationEnum("qualification").notNull().default("needs_info"),
     qualificationReasons: text("qualification_reasons").array().notNull().default(sql`'{}'::text[]`),
     qualificationOverride: boolean("qualification_override").notNull().default(false),

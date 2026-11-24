@@ -43,7 +43,7 @@ export default async function FollowUpsPage() {
             {none.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 py-2">
                 <Link href={`/leads/${l.id}`} className="hover:underline"><span className="text-muted tabular">{l.recordId}</span> {fullName(l)}</Link>
-                <span className="flex items-center gap-2"><StatusPill status={l.status as Status} /><span className="text-xs text-muted">score {l.score}</span></span>
+                <span className="flex items-center gap-2"><StatusPill status={l.status as Status} /></span>
               </li>
             ))}
           </ul>
@@ -57,7 +57,7 @@ export default async function FollowUpsPage() {
             {unassigned.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 py-2">
                 <Link href={`/leads/${l.id}`} className="hover:underline"><span className="text-muted tabular">{l.recordId}</span> {fullName(l)}</Link>
-                <span className="text-xs text-muted">{fmtRelative(l.createdAt, page.now)} · score {l.score}</span>
+                <span className="text-xs text-muted">{fmtRelative(l.createdAt, page.now)}</span>
               </li>
             ))}
           </ul>
@@ -83,7 +83,7 @@ function Section({ title, tone, rows, now, empty }: { title: string; tone: "bloo
                   <span className="font-normal text-muted tabular">{r.recordId}</span> {fullName(r)}
                 </Link>
                 <div className="text-xs text-muted">
-                  {r.note ?? "Follow up"} · event {fmtDate(r.eventDate)} · score {r.score}
+                  {r.note ?? "Follow up"} · event {fmtDate(r.eventDate)}
                 </div>
               </div>
               <div className="flex items-center gap-3">

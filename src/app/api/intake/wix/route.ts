@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/intake/wix — Wix Quote Builder (Velo) and Contact Us (Automation) submissions.
  * Verified, idempotent on submission_id, and runs the full pipeline in one short
- * transaction (normalize → dedupe → score → qualify → assign → first follow-up).
+ * transaction (normalize → dedupe → qualify → assign → first follow-up).
  * Emails/notifications go out after commit; nothing slow blocks the response.
  */
 export async function POST(req: NextRequest) {

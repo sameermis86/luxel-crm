@@ -94,7 +94,7 @@ async function hasOpenFollowUp(tx: Tx, leadId: string) {
 
 /**
  * The intake pipeline shared by the Wix webhook, manual entry and CSV import:
- *   idempotency → normalize → duplicate check → score → qualify → assign → first follow-up
+ *   idempotency → normalize → duplicate check → qualify → assign → first follow-up
  */
 export async function ingestLead(tx: Tx, ctx: Ctx, input: IngestInput, opts: IngestOptions): Promise<IngestResult> {
   const now = opts.now ?? new Date();
@@ -171,7 +171,7 @@ export async function ingestLead(tx: Tx, ctx: Ctx, input: IngestInput, opts: Ing
     }
   }
 
-  // 4–5. Create (normalizes, scores, qualifies)
+  // 4–5. Create (normalizes, qualifies)
   const lead = await createLead(tx, ctx, fields, {
     eventType: opts.mode === "import" ? "imported" : "created",
     payload: {

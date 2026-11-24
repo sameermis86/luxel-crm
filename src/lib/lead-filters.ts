@@ -30,7 +30,6 @@ export const leadFilterSchema = z.object({
   source: csv(z.enum(SOURCES)).catch(undefined),
   event_type: csv(z.enum(EVENT_TYPES)).catch(undefined),
   owner: csv(z.union([z.string().uuid(), z.literal("unassigned"), z.literal("me")])).catch(undefined),
-  band: csv(z.enum(["hot", "warm", "cold"])).catch(undefined),
   created_from: isoDate.optional().catch(undefined),
   created_to: isoDate.optional().catch(undefined),
   won_from: isoDate.optional().catch(undefined),
@@ -63,7 +62,6 @@ export const SORTABLE = {
   name: sql`lower(coalesce(${leads.lastName}, '') || ' ' || coalesce(${leads.firstName}, ''))`,
   event_date: leads.eventDate,
   source: leads.source,
-  score: leads.score,
   qualification: leads.qualification,
   status: leads.status,
   next_follow_up: leads.nextFollowUpAt,
@@ -126,7 +124,7 @@ export function leadsHref(f: LeadFilter, extra: Record<string, string> = {}) {
 export interface WhereContext {
   now: Date;
   userId: string | null;
-  settings: Pick<Settings, "scoring" | "followUps" | "businessHours">;
+  settings: Pick<Settings, "followUps" | "businessHours">;
 }
 
 /** Open = not won/lost/unqualified. */
@@ -171,16 +169,6 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.owner?.length) {
     const ids = f.owner.map((o) => (o === "me" ? wc.userId : o)).filter((o): o is string => !!o && o !== "unassigned");
     c.push(or(ids.length ? inArray(leads.ownerId, ids) : undefined, f.owner.includes("unassigned") ? isNull(leads.ownerId) : undefined));
-  }
-  if (f.band?.length) {
-    const { hot, warm } = wc.settings.scoring.bands;
-    c.push(
-      or(
-        ...f.band.map((b) =>
-          b === "hot" ? gte(leads.score, hot) : b === "warm" ? and(gte(leads.score, warm), lt(leads.score, hot)) : lt(leads.score, warm),
-        ),
-      ),
-    );
   }
   if (f.created_from) c.push(gte(leads.createdAt, startOfDayInTz(f.created_from, tz)));
   if (f.created_to) c.push(lt(leads.createdAt, endOfDayExclusiveInTz(f.created_to, tz)));
@@ -227,7 +215,6 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.qualification) out.push(f.qualification.map(h).join(", "));
   if (f.source) out.push(`source: ${f.source.map(h).join(", ")}`);
   if (f.event_type) out.push(f.event_type.map(h).join(", "));
-  if (f.band) out.push(f.band.join(", "));
   if (f.created_from || f.created_to) out.push(`created ${f.created_from ?? "…"} → ${f.created_to ?? "…"}`);
   if (f.quoted_from || f.quoted_to) out.push(`quote sent ${f.quoted_from ?? "…"} → ${f.quoted_to ?? "…"}`);
   if (f.closed_from || f.closed_to) out.push(`won or lost ${f.closed_from ?? "…"} → ${f.closed_to ?? "…"}`);

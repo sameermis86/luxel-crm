@@ -8,7 +8,7 @@ import { updateLead, LeadError } from "@/server/leads/service";
 /**
  * Goodshuffle Pro → CRM status sync, through Goodshuffle's Google Calendar sync.
  * Mode "preview" (default) only records what it would change; "apply" makes the changes.
- * Every applied change goes through updateLead (audited, rescored) tagged via: "goodshuffle".
+ * Every applied change goes through updateLead (audited, requalified) tagged via: "goodshuffle".
  */
 
 const STATE_KEY = "goodshuffle_sync";

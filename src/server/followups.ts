@@ -15,7 +15,6 @@ export interface FollowUpRow {
   lastName: string | null;
   status: string;
   eventDate: string | null;
-  score: number;
   ownerName: string | null;
 }
 
@@ -36,7 +35,6 @@ export async function myFollowUps(tx: Tx, userId: string, now: Date, tz: string)
       lastName: leads.lastName,
       status: leads.status,
       eventDate: leads.eventDate,
-      score: leads.score,
       ownerName: users.name,
     })
     .from(followUps)
@@ -54,17 +52,17 @@ export async function myFollowUps(tx: Tx, userId: string, now: Date, tz: string)
 /** My open leads with no follow-up scheduled at all (they count as awaiting follow-up). */
 export async function myLeadsWithoutFollowUp(tx: Tx, userId: string) {
   return tx
-    .select({ id: leads.id, recordId: leads.recordId, firstName: leads.firstName, lastName: leads.lastName, status: leads.status, createdAt: leads.createdAt, score: leads.score })
+    .select({ id: leads.id, recordId: leads.recordId, firstName: leads.firstName, lastName: leads.lastName, status: leads.status, createdAt: leads.createdAt })
     .from(leads)
     .where(and(liveOpenLead, eq(leads.ownerId, userId), isNull(leads.nextFollowUpAt)))
-    .orderBy(desc(leads.score))
+    .orderBy(desc(leads.createdAt))
     .limit(100);
 }
 
 /** New leads nobody owns (e.g. nobody was accepting leads when they arrived). */
 export async function newUnassignedLeads(tx: Tx, since?: Date) {
   return tx
-    .select({ id: leads.id, recordId: leads.recordId, firstName: leads.firstName, lastName: leads.lastName, createdAt: leads.createdAt, score: leads.score, eventType: leads.eventType })
+    .select({ id: leads.id, recordId: leads.recordId, firstName: leads.firstName, lastName: leads.lastName, createdAt: leads.createdAt, eventType: leads.eventType })
     .from(leads)
     .where(and(liveOpenLead, isNull(leads.ownerId), since ? gte(leads.createdAt, since) : undefined))
     .orderBy(desc(leads.createdAt))

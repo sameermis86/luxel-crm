@@ -9,7 +9,7 @@ const users: AssignableUser[] = [
 ];
 const rr: RuleLike = { id: "default", priority: 1000, conditions: {}, assignToUserId: null, roundRobinPool: null, active: true };
 const facts = {
-  source: "quote_builder" as const, eventType: "wedding" as const, scoreBand: "hot" as const,
+  source: "quote_builder" as const, eventType: "wedding" as const,
   budget: 9000, sourceDetail: null, venueName: null,
 };
 
@@ -30,11 +30,11 @@ describe("pickAssignee", () => {
     const rules: RuleLike[] = [
       rr,
       { id: "corp", priority: 10, conditions: { eventTypes: ["corporate"] }, assignToUserId: "mansi", roundRobinPool: null, active: true },
-      { id: "hot-weddings", priority: 20, conditions: { eventTypes: ["wedding"], scoreBands: ["hot"] }, assignToUserId: "sameer", roundRobinPool: null, active: true },
+      { id: "big-weddings", priority: 20, conditions: { eventTypes: ["wedding"], budgetMin: 8000 }, assignToUserId: "sameer", roundRobinPool: null, active: true },
     ];
-    expect(pickAssignee(facts, rules, users, {}).ruleId).toBe("hot-weddings");
+    expect(pickAssignee(facts, rules, users, {}).ruleId).toBe("big-weddings");
     expect(pickAssignee({ ...facts, eventType: "corporate" }, rules, users, {}).ruleId).toBe("corp");
-    expect(pickAssignee({ ...facts, scoreBand: "cold" }, rules, users, { sameer: 1, mansi: 0 }).ruleId).toBe("default");
+    expect(pickAssignee({ ...facts, budget: 3000 }, rules, users, { sameer: 1, mansi: 0 }).ruleId).toBe("default");
   });
   it("conditions: source, budget range, venue partner", () => {
     const rule = (conditions: any): RuleLike => ({ id: "r", priority: 1, conditions, assignToUserId: "mansi", roundRobinPool: null, active: true });

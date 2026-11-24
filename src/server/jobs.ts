@@ -2,19 +2,19 @@ import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { withCtx, systemCtx } from "@/db/client";
 import { leads, users } from "@/db/schema";
 import { getSettings } from "./settings";
-import { rescoreLead } from "./leads/service";
+import { requalifyLead } from "./leads/service";
 import { scanAllDuplicates } from "./leads/duplicates";
 import { myFollowUps, newUnassignedLeads, myLeadsWithoutFollowUp } from "./followups";
 import { sendEmail, appUrl, esc } from "./email";
 import { fmtDateTime, fmtDate } from "@/lib/format";
 
 /**
- * Nightly: recompute every open lead's score/qualification (timing decays as the
+ * Nightly: recompute every open lead's qualification (an event drifts inside the minimum lead time as the
  * event approaches) and re-run duplicate detection across the whole book.
  */
 export async function runNightly(orgId: string, now = new Date()) {
   const ctx = systemCtx(orgId);
-  let rescored = 0;
+  let requalified = 0;
   const ids = await withCtx(ctx, (tx) =>
     tx
       .select({ id: leads.id })
@@ -23,11 +23,11 @@ export async function runNightly(orgId: string, now = new Date()) {
   );
   // small transactions so one bad row can't block the run
   for (const { id } of ids) {
-    const r = await withCtx(ctx, async (tx) => rescoreLead(tx, ctx, id, await getSettings(tx, orgId), now));
-    if (r.changed.length) rescored++;
+    const r = await withCtx(ctx, async (tx) => requalifyLead(tx, ctx, id, await getSettings(tx, orgId), now));
+    if (r.changed.length) requalified++;
   }
   const dupes = await withCtx(ctx, (tx) => scanAllDuplicates(tx, ctx));
-  return { checked: ids.length, rescored, ...dupes };
+  return { checked: ids.length, requalified, ...dupes };
 }
 
 export interface Digest {
@@ -74,8 +74,8 @@ export function renderDigest(d: Digest, dateLabel: string) {
   <h2 style="font-family:Georgia,serif;font-weight:normal;margin:4px 0 12px">Good morning, ${esc(d.user.name)}</h2>
   ${section("Overdue", "#BC5468", d.overdue.map((f) => li(`${link(f.leadId, `${f.recordId} ${name(f)}`)} · due ${esc(fmtDateTime(f.dueAt))}${f.note ? ` · ${esc(f.note)}` : ""}`)))}
   ${section("Due today", "#1B2420", d.today.map((f) => li(`${link(f.leadId, `${f.recordId} ${name(f)}`)} · ${esc(fmtDateTime(f.dueAt))}${f.note ? ` · ${esc(f.note)}` : ""}`)))}
-  ${section("Your leads with no follow-up set", "#B07A2A", d.noFollowUp.slice(0, 15).map((l) => li(`${link(l.id, `${l.recordId} ${name(l)}`)} · score ${l.score}`)))}
-  ${section("New unassigned leads", "#5F8568", d.unassigned.map((l) => li(`${link(l.id, `${l.recordId} ${name(l)}`)} · ${esc(l.eventType)} · score ${l.score}`)))}
+  ${section("Your leads with no follow-up set", "#B07A2A", d.noFollowUp.slice(0, 15).map((l) => li(`${link(l.id, `${l.recordId} ${name(l)}`)}`)))}
+  ${section("New unassigned leads", "#5F8568", d.unassigned.map((l) => li(`${link(l.id, `${l.recordId} ${name(l)}`)} · ${esc(l.eventType)}`)))}
   <p style="margin-top:24px"><a href="${appUrl("/follow-ups")}" style="background:#1B2420;color:#F4F2EC;padding:8px 14px;border-radius:6px;text-decoration:none">Open my follow-ups</a></p>
 </div>`;
   const total = d.overdue.length + d.today.length + d.noFollowUp.length + d.unassigned.length;

@@ -10,54 +10,55 @@ const good = {
 };
 
 describe("qualify", () => {
-  it("qualified when no hard rule fails, score >= 50 and event date known", () => {
-    expect(qualify(good, 72, cfg, NOW)).toEqual({ qualification: "qualified", reasons: [] });
+  it("qualified when no hard rule fails and the event date is known", () => {
+    expect(qualify(good, cfg, NOW)).toEqual({ qualification: "qualified", reasons: [] });
   });
-  it("needs info below the score threshold", () => {
-    const r = qualify(good, 49, cfg, NOW);
-    expect(r.qualification).toBe("needs_info");
-    expect(r.reasons).toContain("Score 49 is below 50");
+  it("a missing budget doesn't hold a lead back", () => {
+    expect(qualify({ ...good, budgetMax: null }, cfg, NOW).qualification).toBe("qualified");
+  });
+  it("event date optional when the setting is off", () => {
+    expect(qualify({ ...good, eventDate: null }, { ...cfg, requireEventDateForQualified: false }, NOW).qualification).toBe("qualified");
   });
   it("needs info with no event date", () => {
-    const r = qualify({ ...good, eventDate: null }, 80, cfg, NOW);
+    const r = qualify({ ...good, eventDate: null }, cfg, NOW);
     expect(r.qualification).toBe("needs_info");
     expect(r.reasons).toContain("No event date");
   });
   it("mentions missing budget as info", () => {
-    const r = qualify({ ...good, budgetMax: null }, 40, cfg, NOW);
+    const r = qualify({ ...good, budgetMax: null }, cfg, NOW);
     expect(r.reasons).toContain("No budget");
   });
   it("unqualified: past event", () => {
-    const r = qualify({ ...good, eventDate: "2026-11-01" }, 80, cfg, NOW);
+    const r = qualify({ ...good, eventDate: "2026-11-01" }, cfg, NOW);
     expect(r).toEqual({ qualification: "unqualified", reasons: ["Event date is in the past"] });
   });
   it("unqualified: fewer than 14 days out (boundary)", () => {
-    expect(qualify({ ...good, eventDate: "2026-12-06" }, 80, cfg, NOW).qualification).toBe("unqualified"); // 13 days
-    expect(qualify({ ...good, eventDate: "2026-12-07" }, 80, cfg, NOW).qualification).toBe("qualified"); // 14 days
+    expect(qualify({ ...good, eventDate: "2026-12-06" }, cfg, NOW).qualification).toBe("unqualified"); // 13 days
+    expect(qualify({ ...good, eventDate: "2026-12-07" }, cfg, NOW).qualification).toBe("qualified"); // 14 days
   });
   it("unqualified: known budget below $2,000", () => {
-    const r = qualify({ ...good, budgetMax: 1500 }, 80, cfg, NOW);
+    const r = qualify({ ...good, budgetMax: 1500 }, cfg, NOW);
     expect(r.qualification).toBe("unqualified");
     expect(r.reasons[0]).toMatch(/below \$2,000/);
-    expect(qualify({ ...good, budgetMax: 2000 }, 80, cfg, NOW).qualification).toBe("qualified");
+    expect(qualify({ ...good, budgetMax: 2000 }, cfg, NOW).qualification).toBe("qualified");
   });
   it("unqualified: outside service area", () => {
-    const r = qualify({ ...good, venueCity: "Ottawa" }, 80, cfg, NOW);
+    const r = qualify({ ...good, venueCity: "Ottawa" }, cfg, NOW);
     expect(r.qualification).toBe("unqualified");
     expect(r.reasons[0]).toMatch(/Ottawa.*outside the service area/);
   });
   it("service area matching is forgiving", () => {
     for (const city of ["toronto", "Vaughan, Ontario", "St Catharines", "Niagara on the Lake", "Richmond Hill ON"]) {
-      expect(qualify({ ...good, venueCity: city }, 80, cfg, NOW).qualification).toBe("qualified");
+      expect(qualify({ ...good, venueCity: city }, cfg, NOW).qualification).toBe("qualified");
     }
   });
   it("unqualified: no valid email and no valid phone", () => {
-    const r = qualify({ ...good, email: "nope", phoneE164: null }, 80, cfg, NOW);
+    const r = qualify({ ...good, email: "nope", phoneE164: null }, cfg, NOW);
     expect(r.qualification).toBe("unqualified");
     expect(r.reasons).toContain("No valid email or phone");
   });
   it("collects every failing hard rule", () => {
-    const r = qualify({ ...good, eventDate: "2026-01-01", budgetMax: 500, email: null }, 10, cfg, NOW);
+    const r = qualify({ ...good, eventDate: "2026-01-01", budgetMax: 500, email: null }, cfg, NOW);
     expect(r.reasons.length).toBe(3);
   });
 });

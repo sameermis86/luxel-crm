@@ -40,14 +40,13 @@ describe("record_id", () => {
 });
 
 describe("createLead", () => {
-  it("normalizes, scores, qualifies and logs created + scored + qualified", async () => {
+  it("normalizes, qualifies and logs created + qualified", async () => {
     const lead = await withCtx(env.sys, (tx) => createLead(tx, env.sys, baseLead));
     expect(lead.emailNormalized).toBe("sofiarossi@gmail.com");
     expect(lead.phoneE164).toBe("+19055550123");
-    expect(lead.score).toBeGreaterThanOrEqual(70);
     expect(lead.qualification).toBe("qualified");
     const ev = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(eq(leadEvents.leadId, lead.id)));
-    expect(ev.map((e) => e.type).sort()).toEqual(["created", "qualified", "scored"]);
+    expect(ev.map((e) => e.type).sort()).toEqual(["created", "qualified"]);
   });
 });
 
@@ -62,10 +61,7 @@ describe("updateLead", () => {
       [["budgetMax", "12000", "5000"], ["guestCount", null, "180"], ["venueName", null, "Paradise Banquet Hall"]].sort(),
     );
     expect(fc.every((e) => e.actorId === env.sameer.id && e.actorKind === "user")).toBe(true);
-    // budget dropped a band → a scored event with old/new
-    const scored = ev.filter((e) => e.type === "scored" && e.oldValue !== null);
-    expect(scored.length).toBe(1);
-    expect(+scored[0].newValue!).toBeLessThan(+scored[0].oldValue!);
+    expect(ev.some((e) => e.type === "scored")).toBe(false); // scoring was removed
   });
 
   it("no-op patch writes nothing", async () => {
@@ -100,14 +96,13 @@ describe("updateLead", () => {
     await expect(withCtx(env.sys, (tx) => updateLead(tx, env.sys, lead.id, { status: "contacted" }))).rejects.toThrow(LeadError);
   });
 
-  it("logging outbound contact moves new → contacted; an inbound reply adds engagement", async () => {
+  it("logging outbound contact moves new → contacted; an inbound reply is recorded", async () => {
     const lead = await withCtx(env.sys, (tx) => createLead(tx, env.sys, baseLead));
     const ctx = env.as(env.mansi);
     await withCtx(ctx, (tx) => logActivity(tx, ctx, lead.id, { kind: "call", summary: "Left voicemail" }));
     const { lead: l2 } = await withCtx(ctx, (tx) => logActivity(tx, ctx, lead.id, { kind: "email", direction: "inbound", summary: "They replied!" }));
     expect(l2.status).toBe("contacted");
     expect(l2.firstReplyAt).toBeTruthy();
-    expect((l2.scoreBreakdown as any).engagement.points).toBe(5);
   });
 });
 

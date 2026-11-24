@@ -2,8 +2,6 @@ import { and, eq, isNull, notInArray, sql, desc } from "drizzle-orm";
 import { asSystem, onCommit, type Ctx, type Tx } from "@/db/client";
 import { assignmentRules, leads, leadEvents, notifications, users, type Lead } from "@/db/schema";
 import { pickAssignee, type AssignmentConditions } from "@/lib/assignment";
-import { scoreBand } from "@/lib/scoring";
-import { budgetForScoring } from "@/lib/scoring";
 import type { Settings } from "@/lib/config/defaults";
 import { updateLead } from "./service";
 import { getSettings } from "../settings";
@@ -34,13 +32,11 @@ export async function autoAssign(tx: Tx, ctx: Ctx, lead: Lead, settings?: Settin
         .where(and(eq(leadEvents.orgId, ctx.orgId), eq(leadEvents.type, "assigned")))
         .groupBy(leadEvents.newValue),
     ]);
-    const budget = budgetForScoring(lead);
     const result = pickAssignee(
       {
         source: lead.source,
         eventType: lead.eventType,
-        scoreBand: scoreBand(lead.score, s.scoring),
-        budget: budget?.value ?? null,
+        budget: lead.budgetMax ?? lead.budgetMin ?? lead.estimateTotal ?? null,
         sourceDetail: lead.sourceDetail,
         venueName: lead.venueName,
       },
@@ -70,9 +66,9 @@ export async function assignLead(tx: Tx, ctx: Ctx, leadId: string, userId: strin
   onCommit(() =>
     sendEmail({
       to: owner.email,
-      subject: `New lead assigned: ${lead.recordId} ${name} (score ${lead.score})`,
+      subject: `New lead assigned: ${lead.recordId} ${name} `,
       html: `<p>Hi ${esc(owner.name)},</p><p><strong>${esc(lead.recordId)} ${esc(name)}</strong> was assigned to you.</p>
-        <p>${esc(lead.eventType)} · ${esc(lead.eventDate ?? "date TBD")} · score ${lead.score} · ${esc(lead.qualification)}</p>
+        <p>${esc(lead.eventType)} · ${esc(lead.eventDate ?? "date TBD")} · ${esc(lead.qualification)}</p>
         <p><a href="${appUrl(`/leads/${lead.id}`)}">Open the lead</a></p>`,
     }),
   );

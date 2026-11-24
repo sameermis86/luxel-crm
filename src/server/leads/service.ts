@@ -18,7 +18,6 @@ import {
 } from "@/db/schema";
 import type { Settings } from "@/lib/config/defaults";
 import { normalizeEmail, normalizePhone, strOrNull } from "@/lib/normalize";
-import { scoreLead } from "@/lib/scoring";
 import { qualify } from "@/lib/qualification";
 import { FUNNEL_RANK, STAGE_TIMESTAMP, validateTransition } from "@/lib/status";
 import { getSettings } from "../settings";
@@ -117,26 +116,20 @@ function derived(l: Pick<Lead, "email" | "phone">) {
   return { emailNormalized: normalizeEmail(l.email), phoneE164: normalizePhone(l.phone) };
 }
 
-export function computeScoreAndQualification(l: Lead | (NewLead & Record<string, any>), settings: Settings, now = new Date()) {
-  const input = {
-    eventType: l.eventType ?? "other",
-    eventDate: l.eventDate ?? null,
-    budgetMin: l.budgetMin ?? null,
-    budgetMax: l.budgetMax ?? null,
-    estimateTotal: l.estimateTotal ?? null,
-    source: l.source ?? "other",
-    captureChannel: l.captureChannel ?? null,
-    email: l.email ?? null,
-    phoneE164: l.phoneE164 ?? null,
-  } as const;
-  const { score, breakdown } = scoreLead(
-    input,
-    { repliedToFirstContact: !!l.firstReplyAt, consultBookedOrHeld: (l.furthestStage ?? 0) >= FUNNEL_RANK.consult_scheduled },
-    settings.scoring,
+export function computeQualification(l: Lead | (NewLead & Record<string, any>), settings: Settings, now = new Date()) {
+  return qualify(
+    {
+      eventDate: l.eventDate ?? null,
+      budgetMin: l.budgetMin ?? null,
+      budgetMax: l.budgetMax ?? null,
+      estimateTotal: l.estimateTotal ?? null,
+      venueCity: l.venueCity ?? null,
+      email: l.email ?? null,
+      phoneE164: l.phoneE164 ?? null,
+    },
+    settings.qualification,
     now,
   );
-  const q = qualify({ ...input, venueCity: l.venueCity ?? null }, score, settings.qualification, now);
-  return { score, breakdown, ...q };
 }
 
 export interface EventInput {
@@ -185,7 +178,7 @@ export interface CreateOptions {
   settings?: Settings;
 }
 
-/** Insert a lead (normalized, scored, qualified) and its `created`/`imported` event. */
+/** Insert a lead (normalized, qualified) and its `created`/`imported` event. */
 export async function createLead(tx: Tx, ctx: Ctx, input: Partial<LeadFields>, opts: CreateOptions = {}): Promise<Lead> {
   const fields = leadPatchSchema.parse(input);
   const settings = opts.settings ?? (await getSettings(tx, ctx.orgId));
@@ -211,9 +204,7 @@ export async function createLead(tx: Tx, ctx: Ctx, input: Partial<LeadFields>, o
   const stageAt = opts.createdAt ?? now;
   applyStageEntry(row, status, stageAt);
 
-  const sq = computeScoreAndQualification(row as any, settings, now);
-  row.score = sq.score;
-  row.scoreBreakdown = sq.breakdown;
+  const sq = computeQualification(row as any, settings, now);
   row.qualification = sq.qualification;
   row.qualificationReasons = sq.reasons;
 
@@ -225,7 +216,6 @@ export async function createLead(tx: Tx, ctx: Ctx, input: Partial<LeadFields>, o
       at: opts.createdAt,
       newValue: lead.recordId,
     },
-    { type: "scored", field: "score", oldValue: null, newValue: String(sq.score), payload: sq.breakdown, at: opts.createdAt },
     {
       type: "qualified",
       field: "qualification",
@@ -273,7 +263,7 @@ export interface UpdateResult {
 
 /**
  * Diff `patch` against the stored lead, validate status moves, save, append one
- * event per changed field, and recompute score + qualification. All in the
+ * event per changed field, and recompute qualification. All in the
  * caller's transaction, so the change and its history commit together.
  */
 export async function updateLead(
@@ -335,10 +325,8 @@ export async function updateLead(
     if (current.status === "won" && fields.status !== "won") set("wonAt", null);
   }
 
-  // Score + qualification
-  const sq = computeScoreAndQualification(next as Lead, settings, now);
-  set("score", sq.score);
-  if (!same(current.scoreBreakdown, sq.breakdown)) next.scoreBreakdown = sq.breakdown;
+  // Qualification
+  const sq = computeQualification(next as Lead, settings, now);
 
   const overriding = qualificationOverride === true || (qualificationOverride === undefined && current.qualificationOverride);
   if (qualificationOverride === false) {
@@ -353,13 +341,12 @@ export async function updateLead(
     set("qualification", sq.qualification);
     if (!same(current.qualificationReasons, sq.reasons)) next.qualificationReasons = sq.reasons;
   }
-  if (!changes.length && same(current.scoreBreakdown, next.scoreBreakdown) && same(current.qualificationReasons, next.qualificationReasons)) {
+  if (!changes.length && same(current.qualificationReasons, next.qualificationReasons)) {
     return { lead: current, changed: [] };
   }
 
   const updateSet: Record<string, any> = { updatedAt: now };
   for (const c of changes) updateSet[c.field] = next[c.field];
-  updateSet.scoreBreakdown = next.scoreBreakdown;
   updateSet.qualificationReasons = next.qualificationReasons;
 
   const [saved] = await tx.update(leads).set(updateSet).where(eq(leads.id, leadId)).returning();
@@ -367,7 +354,7 @@ export async function updateLead(
   const events: EventInput[] = changes.map((c) => ({
     type:
       opts.eventTypeFor?.[c.field] ??
-      (c.field === "score" ? "scored" : c.field === "qualification" || c.field.startsWith("qualificationOverride") ? "qualified" : undefined) ??
+      (c.field === "qualification" || c.field.startsWith("qualificationOverride") ? "qualified" : undefined) ??
       FIELD_EVENT[c.field] ??
       "field_changed",
     field: c.field,
@@ -375,11 +362,9 @@ export async function updateLead(
     newValue: serialize(c.new),
     at: opts.now,
     payload:
-      c.field === "score"
-        ? sq.breakdown
-        : c.field === "qualification"
-          ? { reasons: overriding ? [] : sq.reasons, override: !!overriding, overrideReason: qualificationOverrideReason ?? null }
-          : opts.payload ?? null,
+      c.field === "qualification"
+        ? { reasons: overriding ? [] : sq.reasons, override: !!overriding, overrideReason: qualificationOverrideReason ?? null }
+        : opts.payload ?? null,
   }));
   if (changes.some((c) => c.field === "status" && c.new === "won")) {
     const days = Math.round((now.getTime() - current.createdAt.getTime()) / 86_400_000);
@@ -399,8 +384,8 @@ export async function updateLead(
   return { lead: saved, changed: changes.map((c) => c.field) };
 }
 
-/** Recompute score/qualification (nightly: timing decays). Writes events only if something moved. */
-export async function rescoreLead(tx: Tx, ctx: Ctx, leadId: string, settings?: Settings, now?: Date) {
+/** Recheck qualification (nightly: an event can drift inside the minimum lead time). Writes events only if something moved. */
+export async function requalifyLead(tx: Tx, ctx: Ctx, leadId: string, settings?: Settings, now?: Date) {
   return updateLead(tx, ctx, leadId, {}, { settings, now, allowReadOnly: false });
 }
 

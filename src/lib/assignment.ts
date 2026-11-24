@@ -1,10 +1,8 @@
 import type { EventType, Source } from "@/db/schema";
-import type { ScoreBand } from "./scoring";
 
 export interface AssignmentConditions {
   sources?: Source[];
   eventTypes?: EventType[];
-  scoreBands?: ScoreBand[];
   budgetMin?: number;
   budgetMax?: number;
   /** case-insensitive substrings matched against source_detail and venue_name */
@@ -29,7 +27,6 @@ export interface AssignableUser {
 export interface AssignmentFacts {
   source: Source;
   eventType: EventType;
-  scoreBand: ScoreBand;
   budget: number | null;
   sourceDetail: string | null;
   venueName: string | null;
@@ -44,7 +41,6 @@ export interface AssignmentResult {
 export function ruleMatches(c: AssignmentConditions, f: AssignmentFacts): boolean {
   if (c.sources?.length && !c.sources.includes(f.source)) return false;
   if (c.eventTypes?.length && !c.eventTypes.includes(f.eventType)) return false;
-  if (c.scoreBands?.length && !c.scoreBands.includes(f.scoreBand)) return false;
   if (c.budgetMin != null && (f.budget == null || f.budget < c.budgetMin)) return false;
   if (c.budgetMax != null && (f.budget == null || f.budget > c.budgetMax)) return false;
   if (c.venuePartners?.length) {

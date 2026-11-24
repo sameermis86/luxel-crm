@@ -86,25 +86,24 @@ describe("daily digest", () => {
 });
 
 describe("nightly job", () => {
-  it("rescores leads whose timing band changed and finds new duplicate pairs", async () => {
-    // scored on Oct 1: event Feb 15 is 4.5 months out → 15 timing points
+  it("requalifies leads whose event drifted inside the minimum lead time and finds new duplicate pairs", async () => {
+    // created Oct 1: event Dec 1 is 61 days out → qualified
     const lead = await withCtx(env.sys, (tx) =>
-      createLead(tx, env.sys, { firstName: "Eve", lastName: "Stone", email: "eve@example.com", eventType: "wedding", eventDate: "2027-02-15", budgetMax: 9000 }, { now: new Date("2026-10-01T12:00:00Z") }),
+      createLead(tx, env.sys, { firstName: "Eve", lastName: "Stone", email: "eve@example.com", eventType: "wedding", eventDate: "2026-12-01", budgetMax: 9000 }, { now: new Date("2026-10-01T12:00:00Z") }),
     );
-    expect((lead.scoreBreakdown as any).timing.points).toBe(15);
+    expect(lead.qualification).toBe("qualified");
     // two leads with the same phone that slipped in without a dedupe check
     const a = await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Fay", lastName: "One", phone: "647-555-0199" }));
     const b = await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "Fay", lastName: "Two", phone: "(647) 555 0199" }));
 
-    const r = await runNightly(env.orgId, NOW); // Nov 24: 2.7 months out → 10 points
-    expect(r.rescored).toBeGreaterThanOrEqual(1);
+    const r = await runNightly(env.orgId, NOW); // Nov 24: 7 days out, under the 14-day minimum
+    expect(r.requalified).toBeGreaterThanOrEqual(1);
     expect(r.newCandidates).toBeGreaterThanOrEqual(1);
 
     const [l] = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.id, lead.id)));
-    expect((l.scoreBreakdown as any).timing.points).toBe(10);
-    expect(l.score).toBe(lead.score - 5);
-    const scored = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "scored"))));
-    expect(scored.some((e) => e.oldValue === String(lead.score) && e.newValue === String(lead.score - 5) && e.actorKind === "system")).toBe(true);
+    expect(l.qualification).toBe("unqualified");
+    const q = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "qualified"))));
+    expect(q.some((e) => e.oldValue === "qualified" && e.newValue === "unqualified" && e.actorKind === "system")).toBe(true);
 
     const pair = await withCtx(env.sys, (tx) => tx.select().from(duplicateCandidates).where(eq(duplicateCandidates.leadA, [a.id, b.id].sort()[0])));
     expect(pair[0]).toMatchObject({ confidence: "high", matchReasons: ["same_phone"] });

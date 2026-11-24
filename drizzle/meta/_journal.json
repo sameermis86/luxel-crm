@@ -71,6 +71,13 @@
       "when": 1795480207251,
       "tag": "0009_drop_utm_campaign",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795484552645,
+      "tag": "0010_drop_score",
+      "breakpoints": true
     }
   ]
 }
