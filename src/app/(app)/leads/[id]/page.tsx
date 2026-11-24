@@ -175,7 +175,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
               <dt className="text-muted">Origin</dt><dd>{titleCase(lead.source)}</dd>
               <dt className="text-muted">Channel</dt><dd>{titleCase(lead.captureChannel)}</dd>
               {lead.sourceDetail && <><dt className="text-muted">Detail</dt><dd>{lead.sourceDetail}</dd></>}
-              {(["utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm"] as const).map((k) =>
+              {(["utmSource", "utmMedium", "utmContent", "utmTerm"] as const).map((k) =>
                 lead[k] ? <Row key={k} k={k.replace("utm", "utm_").toLowerCase()} v={lead[k]} /> : null,
               )}
               {lead.landingPage && <Row k="landing page" v={lead.landingPage} />}

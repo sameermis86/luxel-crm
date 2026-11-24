@@ -26,7 +26,6 @@ export const IMPORT_FIELDS = {
   message: "Message / notes",
   source: "Source",
   sourceDetail: "Source detail",
-  campaign: "utm_campaign",
   submittedAt: "Submitted / lead date",
   stage: "Stage / status",
   quoteValue: "Quote value",
@@ -54,7 +53,6 @@ const H: [RegExp, ImportField][] = [
   [/(message|notes?|comments?|details)/, "message"],
   [/^(source|lead source|how did you hear.*|channel)$/, "source"],
   [/(source detail|referred by|referrer name)/, "sourceDetail"],
-  [/(campaign|utm.?campaign)/, "campaign"],
   [/(submitted|submission (time|date)|lead.?date|created|date received|inquiry date|date)$/, "submittedAt"],
   [/^(stage|status|pipeline stage)$/, "stage"],
   [/(quote|estimate).*(value|amount|total)?$/, "quoteValue"],
@@ -236,7 +234,6 @@ export function parseRow(raw: Record<string, string>, rowNumber: number, mapping
   if (got.services) input.servicesRequested = mapServices(got.services);
   if (got.message) input.message = got.message;
   if (got.sourceDetail) input.sourceDetail = got.sourceDetail;
-  if (got.campaign) input.utmCampaign = got.campaign;
   for (const [f, k] of [["quoteValue", "quoteValue"]] as const) {
     if (got[f]) {
       const n = parseMoney(got[f]!);

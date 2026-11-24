@@ -35,7 +35,6 @@ const samples: { name: string; auth: "hmac" | "query"; body: Record<string, unkn
       message: "Ivory and sage, lots of greenery.",
       utm_source: "google",
       utm_medium: "cpc",
-      utm_campaign: "fall-wedding-2027",
       landing_page: "https://www.luxeldecor.com/estimate",
       referrer: "https://www.google.com/",
     },

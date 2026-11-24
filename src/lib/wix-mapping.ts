@@ -41,7 +41,6 @@ export interface MappedSubmission {
     message?: string | null;
     utmSource?: string | null;
     utmMedium?: string | null;
-    utmCampaign?: string | null;
     utmContent?: string | null;
     utmTerm?: string | null;
     landingPage?: string | null;
@@ -84,7 +83,6 @@ const RULES: { field: string; re: RegExp }[] = [
   { field: "submittedAt", re: /^(submitted at|submitted|submission time|created date|createddate|created at|timestamp)$/ },
   { field: "utmSource", re: /^utm source$/ },
   { field: "utmMedium", re: /^utm medium$/ },
-  { field: "utmCampaign", re: /^utm campaign$/ },
   { field: "utmContent", re: /^utm content$/ },
   { field: "utmTerm", re: /^utm term$/ },
   { field: "landingPage", re: /^(landing page|landing url|page url|page)$/ },
@@ -210,7 +208,7 @@ export function mapWixPayload(body: unknown, opts: { defaultForm?: IntakeForm } 
   if (input.eventType === undefined && input.servicesRequested?.length === 1 && input.servicesRequested[0] === "rentals") input.eventType = "rental_only";
   const msg = [got.message, got.services && !input.servicesRequested?.length ? `Services: ${got.services}` : null].filter(Boolean).join("\n");
   if (msg) input.message = msg;
-  for (const k of ["utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "landingPage", "referrerUrl", "sourceDetail"] as const) {
+  for (const k of ["utmSource", "utmMedium", "utmContent", "utmTerm", "landingPage", "referrerUrl", "sourceDetail"] as const) {
     if (got[k]) input[k] = got[k];
   }
 

@@ -197,7 +197,6 @@ export const leads = pgTable(
     sourceDetail: text("source_detail"),
     utmSource: text("utm_source"),
     utmMedium: text("utm_medium"),
-    utmCampaign: text("utm_campaign"),
     utmContent: text("utm_content"),
     utmTerm: text("utm_term"),
     landingPage: text("landing_page"),

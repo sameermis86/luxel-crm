@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { Qualification, Status, EventType, Source, LostReason } from "@/db/schema";
 import { STATUSES, LOST_REASONS } from "@/db/schema";
-import { StatusPill, ScoreBadge, QualBadge } from "@/components/badges";
+import { ScoreBadge, QualBadge } from "@/components/badges";
 import { STATUS_LABELS, LOST_REASON_LABELS } from "@/lib/status";
 import { fmtDate, fmtRelative, titleCase } from "@/lib/format";
 import { bulkAction, type ActionResult } from "./actions";
+import { StatusCell } from "./status-cell";
 
 export interface Row {
   id: string;
@@ -25,6 +26,7 @@ export interface Row {
   nextFollowUpAt: string | null;
   createdAt: string;
   returningInquiry: boolean;
+  duplicateOfId?: string | null;
 }
 
 const COLS: { key: string; label: string; sort?: string }[] = [
@@ -150,7 +152,7 @@ export function LeadsTable(props: {
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
                   <td className="td"><ScoreBadge score={r.score} band={band(r.score)} /></td>
                   <td className="td"><QualBadge q={r.qualification} /></td>
-                  <td className="td"><StatusPill status={r.status} /></td>
+                  <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} /></td>
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
                   <td className={`td whitespace-nowrap tabular ${overdue ? "font-medium text-bloom" : ""}`}>
                     {r.nextFollowUpAt ? fmtRelative(r.nextFollowUpAt, now) : <span className="text-muted">none</span>}

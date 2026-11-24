@@ -87,7 +87,6 @@ export async function createLeadAction(_: ActionResult | null, fd: FormData): Pr
       servicesRequested: fd.getAll("services").map(String),
       message: nullable(fd, "message") ?? null,
       sourceDetail: nullable(fd, "sourceDetail") ?? null,
-      utmCampaign: nullable(fd, "utmCampaign") ?? null,
       explicitSource: source,
       explicitChannel: channel ?? (["phone", "email", "walk_in", "instagram", "facebook", "wedding_show"].includes(source) ? source : null),
     };
@@ -128,7 +127,7 @@ export async function checkDuplicatesAction(probe: {
 
 /* ----------------------------- edit --------------------------------------- */
 
-const editable = ["firstName", "lastName", "partnerName", "email", "phone", "venueName", "venueCity", "message", "sourceDetail", "utmCampaign"] as const;
+const editable = ["firstName", "lastName", "partnerName", "email", "phone", "venueName", "venueCity", "message", "sourceDetail"] as const;
 
 export async function updateLeadFieldsAction(leadId: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
   const session = await requireSession();
@@ -178,6 +177,38 @@ export async function changeStatusAction(leadId: string, _: ActionResult | null,
       }
     });
   });
+  revalidatePath(`/leads/${leadId}`);
+  return res;
+}
+
+/**
+ * Status change straight from the leads list. Same rules as the lead page (allowed
+ * transitions, reasons for lost/unqualified), logged in the timeline. An open lead with
+ * no follow-up gets the default one for its new stage.
+ */
+export async function changeStatusInlineAction(
+  leadId: string,
+  input: { status: string; lostReason?: string | null; unqualifiedReason?: string | null },
+): Promise<ActionResult> {
+  const session = await requireSession();
+  const ctx = ctxFor(session);
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const status = z.enum(STATUSES).parse(input.status);
+    const patch: Record<string, unknown> = { status };
+    if (status === "lost") patch.lostReason = z.enum(LOST_REASONS).parse(input.lostReason);
+    if (status === "unqualified") patch.unqualifiedReason = z.string().trim().min(1, "Give a reason").max(500).parse(input.unqualifiedReason ?? "");
+    const lead = await withCtx(ctx, async (tx) => {
+      const { lead } = await updateLead(tx, ctx, z.string().uuid().parse(leadId), patch as any);
+      if (!["won", "lost", "unqualified"].includes(lead.status) && !lead.nextFollowUpAt) {
+        const s = await getSettings(tx, ctx.orgId);
+        await setFollowUp(tx, ctx, lead.id, { dueAt: suggestNextFollowUp(status, new Date(), s.followUps), note: `After status → ${status.replace(/_/g, " ")}` });
+      }
+      return lead;
+    });
+    return { ok: true, message: "Status updated", data: { status: lead.status } };
+  });
+  revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   return res;
 }

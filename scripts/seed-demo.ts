@@ -30,7 +30,6 @@ async function main() {
     tx.execute<{ id: string }>(sql`select app.resolve_org(${process.env.DEFAULT_ORG_SLUG ?? "luxel"}) as id`),
   );
   const sys = systemCtx(orgId);
-  const campaigns = ["spring-bridal-2026", "fall-gala-2026", "ig-reels-weddings", "gbp-posts"];
   const now = new Date();
   let made = 0;
   for (let i = 0; i < 140; i++) {
@@ -44,9 +43,9 @@ async function main() {
     const budget = rand() < 0.25 ? null : Math.round((1500 + rand() * 16000) / 250) * 250;
     const first = pick(FIRST);
     const last = pick(LAST);
-    const utm = source === "google_ads" ? { utmSource: "google", utmMedium: "cpc", utmCampaign: pick(campaigns.slice(0, 2)) }
-      : source === "instagram" && rand() < 0.6 ? { utmSource: "instagram", utmMedium: "social", utmCampaign: "ig-reels-weddings" }
-      : source === "google_business_profile" ? { utmSource: "gbp", utmMedium: "organic", utmCampaign: "gbp-posts" } : {};
+    const utm = source === "google_ads" ? { utmSource: "google", utmMedium: "cpc" }
+      : source === "instagram" && rand() < 0.6 ? { utmSource: "instagram", utmMedium: "social" }
+      : source === "google_business_profile" ? { utmSource: "gbp", utmMedium: "organic" } : {};
     await withCtx(sys, async (tx) => {
       const r = await ingestLead(
         tx,

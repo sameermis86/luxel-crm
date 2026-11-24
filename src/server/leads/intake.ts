@@ -70,7 +70,7 @@ export async function prepareFields(tx: Tx, ctx: Ctx, input: IngestInput, opts: 
 
 const FILLABLE: (keyof LeadFields)[] = [
   "firstName", "lastName", "partnerName", "email", "phone", "eventDate", "venueName", "venueCity", "guestCount",
-  "budgetMin", "budgetMax", "estimateTotal", "tierInterest", "utmSource", "utmMedium", "utmCampaign",
+  "budgetMin", "budgetMax", "estimateTotal", "tierInterest", "utmSource", "utmMedium",
   "utmContent", "utmTerm", "landingPage", "referrerUrl", "sourceDetail", "quoteValue",
 ];
 

@@ -15,7 +15,7 @@ const LABELS: Record<string, string> = {
   eventDate: "Event date", venueName: "Venue", venueCity: "Venue city", guestCount: "Guests", budgetMin: "Budget min", budgetMax: "Budget max",
   estimateTotal: "Quote Builder estimate", servicesRequested: "Services", tierInterest: "Tier", message: "Message", source: "Source",
   captureChannel: "Channel", sourceDetail: "Source detail", utmSource: "utm_source", utmMedium: "utm_medium",
-  utmCampaign: "utm_campaign", utmContent: "utm_content", utmTerm: "utm_term", landingPage: "Landing page", referrerUrl: "Referrer",
+  utmContent: "utm_content", utmTerm: "utm_term", landingPage: "Landing page", referrerUrl: "Referrer",
   ownerId: "Owner", quoteValue: "Quote",
 };
 

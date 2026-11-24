@@ -33,7 +33,7 @@ describe("mapWixPayload", () => {
     expect(m.input).toMatchObject({
       firstName: "Sofia", lastName: "Rossi", partnerName: "Marco Bianchi", email: "sofia@example.com", phone: "905-555-0123",
       eventType: "wedding", eventDate: "2027-06-12", venueName: "Paradise Banquet Hall", venueCity: "Vaughan", guestCount: 180,
-      tierInterest: "elegant", estimateTotal: 8450, utmSource: "google", utmMedium: "cpc", utmCampaign: "spring-bridal-2027",
+      tierInterest: "elegant", estimateTotal: 8450, utmSource: "google", utmMedium: "cpc",
       landingPage: "https://www.luxeldecor.com/estimate", referrerUrl: "https://www.google.com/",
     });
     expect(m.input.servicesRequested).toEqual(expect.arrayContaining(["centerpieces", "ceremony"]));

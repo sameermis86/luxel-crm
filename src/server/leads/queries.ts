@@ -30,7 +30,6 @@ export const listColumns = {
   budgetMin: leads.budgetMin,
   budgetMax: leads.budgetMax,
   guestCount: leads.guestCount,
-  utmCampaign: leads.utmCampaign,
 };
 
 export async function countLeads(tx: Tx, filter: LeadFilter, wc: WhereContext, extra?: SQL) {

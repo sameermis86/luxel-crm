@@ -70,8 +70,8 @@ describe("POST /api/intake/wix", () => {
     const fus = await withCtx(env.sys, (tx) => tx.select().from(followUps).where(and(eq(followUps.leadId, lead.id), isNull(followUps.doneAt))));
     expect(fus.length).toBe(1);
 
-    // utm_campaign is kept as raw attribution
-    expect(lead.utmCampaign).toBe("Spring-Bridal-2027");
+    // utm_campaign is no longer stored as a field (it stays in the raw payload only)
+    expect("utmCampaign" in lead).toBe(false);
 
     // raw payload stored on the created event, actor = webhook
     const [created] = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, lead.id), eq(leadEvents.type, "created"))));

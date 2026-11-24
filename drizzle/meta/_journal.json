@@ -64,6 +64,13 @@
       "when": 1795479684266,
       "tag": "0008_drop_campaigns_revenue",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795480207251,
+      "tag": "0009_drop_utm_campaign",
+      "breakpoints": true
     }
   ]
 }

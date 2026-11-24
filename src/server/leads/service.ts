@@ -53,7 +53,6 @@ export const leadFieldsSchema = z.object({
   sourceDetail: z.string().trim().max(300).nullable(),
   utmSource: z.string().max(200).nullable(),
   utmMedium: z.string().max(200).nullable(),
-  utmCampaign: z.string().max(200).nullable(),
   utmContent: z.string().max(200).nullable(),
   utmTerm: z.string().max(200).nullable(),
   landingPage: z.string().max(2000).nullable(),
