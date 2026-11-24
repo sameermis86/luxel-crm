@@ -354,7 +354,18 @@ const ACTIVITY_EVENT = { call: "call_logged", email: "email_logged", meeting: "m
  * `contacted`; an inbound reply after first contact counts toward engagement.
  * Any open follow-ups due by now are marked done.
  */
-export async function logActivity(tx: Tx, ctx: Ctx, leadId: string, input: ActivityInput, nowArg?: Date) {
+export async function logActivity(
+  tx: Tx,
+  ctx: Ctx,
+  leadId: string,
+  input: ActivityInput,
+  nowArg?: Date,
+  /**
+   * closeDueBy: follow-ups due by this time are marked done (default: now + 12h). Synced history
+   * (the mailbox) passes the activity's own time, or null to close none. extraPayload goes on the event.
+   */
+  opts: { closeDueBy?: Date | null; extraPayload?: Record<string, unknown> } = {},
+) {
   const now = nowArg ?? new Date();
   const a = activitySchema.parse(input);
   const lead = await getLeadForUpdate(tx, leadId);
@@ -362,7 +373,7 @@ export async function logActivity(tx: Tx, ctx: Ctx, leadId: string, input: Activ
   const at = a.occurredAt ?? now;
 
   await writeEvents(tx, ctx, leadId, [
-    { at: nowArg ? at : undefined, type: ACTIVITY_EVENT[a.kind], payload: { summary: a.summary, direction: a.direction, outcome: a.outcome ?? null, occurredAt: at } },
+    { at: nowArg ? at : undefined, type: ACTIVITY_EVENT[a.kind], payload: { summary: a.summary, direction: a.direction, outcome: a.outcome ?? null, occurredAt: at, ...(opts.extraPayload ?? {}) } },
   ]);
 
   if (a.kind === "note") return { lead };
@@ -377,11 +388,14 @@ export async function logActivity(tx: Tx, ctx: Ctx, leadId: string, input: Activ
   const { lead: updated } = await updateLead(tx, ctx, leadId, patch, { now });
 
   // close follow-ups that this activity satisfied
-  const due = await tx
-    .select()
-    .from(followUps)
-    .where(and(eq(followUps.leadId, leadId), isNull(followUps.doneAt), lte(followUps.dueAt, new Date(now.getTime() + 12 * 3600_000))));
-  for (const f of due) await completeFollowUp(tx, ctx, f.id, now, { viaActivity: a.kind });
+  const closeDueBy = opts.closeDueBy === undefined ? new Date(now.getTime() + 12 * 3600_000) : opts.closeDueBy;
+  if (closeDueBy) {
+    const due = await tx
+      .select()
+      .from(followUps)
+      .where(and(eq(followUps.leadId, leadId), isNull(followUps.doneAt), lte(followUps.dueAt, closeDueBy)));
+    for (const f of due) await completeFollowUp(tx, ctx, f.id, now, { viaActivity: a.kind });
+  }
 
   return { lead: updated };
 }

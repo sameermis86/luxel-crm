@@ -14,6 +14,8 @@ import { getSyncState } from "@/server/intake/wix-sync";
 import { GoodshufflePanel } from "./goodshuffle-panel";
 import { configuredCalendars, getGsState, getGsSettings } from "@/server/integrations/goodshuffle";
 import { PageHeader } from "@/components/page-header";
+import { MailboxPanel } from "./mailbox-panel";
+import { getMailboxState, mailboxConfigured } from "@/server/integrations/mailbox";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // "Sync now" can import a backlog
@@ -30,7 +32,7 @@ export default async function ImportsPage() {
   if (!can(page.session, "imports:create")) redirect("/leads");
   const canUndo = can(page.session, "imports:undo");
   const sync = await getSyncState(page.session.orgId);
-  const [gs, gsSettings] = await Promise.all([getGsState(page.session.orgId), getGsSettings(page.session.orgId)]);
+  const [gs, gsSettings, mailState] = await Promise.all([getGsState(page.session.orgId), getGsSettings(page.session.orgId), getMailboxState(page.session.orgId)]);
 
   return (
     <div className="space-y-6">
@@ -50,6 +52,8 @@ export default async function ImportsPage() {
           liveSince: sync.liveSince ?? null,
         }}
       />
+
+      <MailboxPanel configured={mailboxConfigured()} mailbox={process.env.MAILBOX_IMAP_USER?.trim() || null} state={mailState} />
 
       <GoodshufflePanel
         isOwner={can(page.session, "settings:manage")}

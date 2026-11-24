@@ -30,6 +30,7 @@
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "0.45.4",
     "geist": "^1.9.2",
+    "imapflow": "1.0.191",
     "inngest": "^3.54.2",
     "libphonenumber-js": "^1.13.17",
     "lucide-react": "^1.78.0",
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
+    "@types/imapflow": "^1.0.189",
     "@types/node": "^26.6.6",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.3.0",

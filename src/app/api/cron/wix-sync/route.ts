@@ -6,6 +6,7 @@ import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync
 import { runOpsSync } from "@/server/ops/sync";
 import { applyBookings, undoBookingWins, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
+import { imapClient, mailboxConfigured, runMailboxSync } from "@/server/integrations/mailbox";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -52,8 +53,10 @@ async function handle(req: NextRequest) {
   let failed = false;
   const apiKey = process.env.WIX_API_KEY;
   const siteId = process.env.WIX_SITE_ID;
-  if (only === "ops") {
-    // lead syncs skipped
+  // ?only=ops / ?only=mailbox: just that step (e.g. to finish a large first run)
+  const step = (k: string) => !only || only === k;
+  if (!step("wix")) {
+    // skipped
   } else if (apiKey && siteId) {
     try {
       out.wix = await runWixSync(orgId, wixRestClient(apiKey, siteId));
@@ -64,7 +67,7 @@ async function handle(req: NextRequest) {
     }
   } else out.wix = { skipped: "WIX_API_KEY / WIX_SITE_ID not configured" };
 
-  if (only !== "ops" && Object.keys(configuredCalendars()).length) {
+  if (step("goodshuffle") && Object.keys(configuredCalendars()).length) {
     try {
       // ?goodshuffle=apply-exact: one-off apply of phone/email matches only
       const gsParam = req.nextUrl.searchParams.get("goodshuffle");
@@ -81,17 +84,17 @@ async function handle(req: NextRequest) {
     }
   }
   // Fulfillment & Ops: signed Goodshuffle contracts → event board (pull sheets, setup, teardown)
-  if (configuredCalendars().signed || configuredCalendars().action_needed) {
+  if (step("ops") && (configuredCalendars().signed || configuredCalendars().action_needed)) {
     try {
-      // whatever is left of the 60s limit (each event commits on its own; the next run continues)
-      out.ops = await runOpsSync(orgId, { budgetMs: Math.max(5_000, 48_000 - (Date.now() - started)) });
+      // part of the 60s limit, leaving room for the steps after it (each event commits on its own; the next run continues)
+      out.ops = await runOpsSync(orgId, { budgetMs: Math.max(5_000, (only === "ops" ? 48_000 : 32_000) - (Date.now() - started)) });
     } catch (e) {
       console.error("[cron] ops sync failed", e);
       out.ops = { error: (e as Error).message };
       failed = true;
     }
   }
-  if (only !== "ops" && setmoreConfigured()) {
+  if (step("setmore") && setmoreConfigured()) {
     try {
       const sm = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
       // bookings → leads: link or create, move statuses forward, replace stale follow-ups (see applyBookings)
@@ -100,6 +103,17 @@ async function handle(req: NextRequest) {
     } catch (e) {
       console.error("[cron] setmore sync failed", e);
       out.setmore = { error: (e as Error).message };
+      failed = true;
+    }
+  }
+  // info@ mailbox → emails logged on lead timelines (whatever time is left; it resumes next run)
+  if (step("mailbox") && mailboxConfigured()) {
+    try {
+      const m = await runMailboxSync(orgId, await imapClient(), { budgetMs: Math.max(5_000, 50_000 - (Date.now() - started)) });
+      out.mailbox = { read: m.read, logged: m.logged, leadsReached: m.leadsReached, followUpsClosed: m.followUpsClosed };
+    } catch (e) {
+      console.error("[cron] mailbox sync failed", e);
+      out.mailbox = { error: (e as Error).message };
       failed = true;
     }
   }

@@ -57,8 +57,16 @@ export const setmoreSchema = z.object({
   excludeContacts: z.array(z.string()).default([]),
 });
 
+export const mailboxSchema = z.object({
+  /** first mailbox sync reads this many days back */
+  backfillDays: z.number().int().min(1).default(180),
+  /** an email sent this long after a follow-up's due time still counts as doing it (hours) */
+  followUpGraceHours: z.number().min(0).default(12),
+});
+
 export const settingsSchema = z.object({
   businessHours: businessHoursSchema,
+  mailbox: mailboxSchema.default({ backfillDays: 180, followUpGraceHours: 12 }),
   setmore: setmoreSchema.default({ proposalServices: ["existing booking", "quote review"], excludeContacts: [] }),
   ops: opsSchema.default({ setupSteps: [], teardownSteps: [], keepDaysAfter: 14 }),
   followUps: followUpSchema,
@@ -82,6 +90,7 @@ export const DEFAULT_SERVICE_AREA = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
+  mailbox: { backfillDays: 180, followUpGraceHours: 12 },
   setmore: { proposalServices: ["existing booking", "quote review"], excludeContacts: [] },
 
   ops: {
