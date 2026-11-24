@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
-import { configuredCalendars, inspectCalendars, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
+import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
 import { runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,13 @@ async function handle(req: NextRequest) {
   if (!orgId) return NextResponse.json({ error: "org not found" }, { status: 500 });
 
   // ?inspect=goodshuffle: masked shape of the Goodshuffle calendars (no client details)
+  if (req.nextUrl.searchParams.get("inspect") === "goodshuffle-items") {
+    try {
+      return NextResponse.json({ ok: true, items: await inspectItems() });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    }
+  }
   if (req.nextUrl.searchParams.get("inspect") === "goodshuffle") {
     try {
       return NextResponse.json({ ok: true, calendars: await inspectCalendars() });

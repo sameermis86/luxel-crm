@@ -68,6 +68,35 @@ export async function inspectCalendars(calendars = configuredCalendars(), fetche
   return out;
 }
 
+/**
+ * Item section of a few upcoming signed projects, to see how Goodshuffle lists items
+ * (for Fulfillment pull sheets). Header lines are masked; emails and phone numbers are removed.
+ */
+export async function inspectItems(calendars = configuredCalendars(), fetcher: IcsFetcher = defaultFetcher, now = new Date()) {
+  const today = dateInTz(now);
+  const mask = (s: string) => s.replace(/\p{L}/gu, "x").replace(/\d/g, "9");
+  const scrub = (s: string) => s.replace(/[^\s@<>]+@[^\s@<>]+/g, "[email]").replace(/\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g, "[phone]");
+  const out: unknown[] = [];
+  for (const st of ["signed", "action_needed"] as const) {
+    if (!calendars[st]) continue;
+    const evs = parseIcs(await fetcher(calendars[st]!)).filter((e) => e.startDate && e.startDate >= today);
+    for (const e of evs.slice(0, 2)) {
+      const d = e.description;
+      const cut = d.search(/<|^Item/im);
+      const head = cut > 0 ? d.slice(0, cut) : d;
+      const items = cut >= 0 ? d.slice(cut) : "";
+      out.push({
+        status: st,
+        headerMasked: mask(head).slice(0, 400),
+        tags: [...new Set((items.match(/<\/?([a-z0-9]+)/gi) ?? []).map((t) => t.toLowerCase()))],
+        itemsRaw: scrub(items).slice(0, 2500),
+        descriptionLength: d.length,
+      });
+    }
+  }
+  return out;
+}
+
 export interface GsChange {
   uid: string;
   gsStatus: GsStatus;
