@@ -9,7 +9,7 @@ import { SyncOpsButton } from "./sync-button";
 export const dynamic = "force-dynamic";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
-const VIEWS = { upcoming: "Next 60 days", week: "Next 7 days", recent: "Past events" } as const;
+const VIEWS = { week: "Next 7 days", upcoming: "Next 60 days", all: "All upcoming", recent: "Past events" } as const;
 
 export default async function OpsBoard({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -17,7 +17,7 @@ export default async function OpsBoard({ searchParams }: { searchParams: SP }) {
   const { events, today } = await withPage(async (tx, p) => {
     const today = dateInTz(p.now, p.settings.businessHours.timezone);
     const [from, to] =
-      view === "recent" ? [addDaysToDate(today, -p.settings.ops.keepDaysAfter), addDaysToDate(today, -1)] : [today, addDaysToDate(today, view === "week" ? 6 : 59)];
+      view === "recent" ? [addDaysToDate(today, -p.settings.ops.keepDaysAfter), addDaysToDate(today, -1)] : [today, addDaysToDate(today, view === "week" ? 6 : view === "all" ? 3650 : 59)];
     return { events: await listOpsEvents(tx, from, to), today };
   });
   const connected = (["signed", "action_needed"] as const).some((s) => configuredCalendars()[s]);
@@ -45,7 +45,7 @@ export default async function OpsBoard({ searchParams }: { searchParams: SP }) {
       {!connected && events.length === 0 ? (
         <p className="card p-6 text-sm text-muted">Connect Goodshuffle&apos;s Signed and Action Needed calendars (Import → Goodshuffle Pro) to fill the board.</p>
       ) : events.length === 0 ? (
-        <p className="card p-10 text-center text-sm text-muted">No signed events {view === "recent" ? "in the past two weeks" : `in the ${VIEWS[view].toLowerCase()}`}.</p>
+        <p className="card p-10 text-center text-sm text-muted">No signed events {view === "recent" ? "in the past two weeks" : view === "all" ? "coming up" : `in the ${VIEWS[view].toLowerCase()}`}.</p>
       ) : (
         <ul className="card divide-y divide-edge">
           {events.map((e) => {
