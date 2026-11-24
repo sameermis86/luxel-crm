@@ -8,6 +8,10 @@ import { parseLeadFilter, parseListParams, filterToParams, describeFilter, FILTE
 import { STATUS_LABELS } from "@/lib/status";
 import { titleCase } from "@/lib/format";
 import { LeadsTable } from "./leads-table";
+import { ConsultationsPanel, type ConsultPanelData } from "./consultations";
+import { countLeads } from "@/server/leads/queries";
+import { getSetmoreState, listAppointments, setmoreConfigured } from "@/server/integrations/setmore";
+import { leadsHref } from "@/lib/lead-filters";
 import { SaveViewForm, DeleteViewButton } from "./saved-views";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +30,30 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
       listUsers(tx),
       tx.select().from(savedViews).where(eq(savedViews.userId, p.session.userId)),
     ]);
-    return { rows, total, users, views };
+    const configured = setmoreConfigured();
+    const day = 86_400_000;
+    const upcomingFilter: LeadFilter = { consult: "upcoming" };
+    const [upcoming, recent, upcomingTotal, sm] = configured
+      ? await Promise.all([
+          listAppointments(tx, p.now, new Date(p.now.getTime() + 30 * day), "asc", 6),
+          listAppointments(tx, new Date(p.now.getTime() - 14 * day), p.now, "desc", 6),
+          countLeads(tx, upcomingFilter, p.wc),
+          getSetmoreState(p.session.orgId),
+        ])
+      : [[], [], 0, {}];
+    const ser = (a: (typeof upcoming)[number]) => ({ ...a, startsAt: a.startsAt.toISOString() });
+    const consult: ConsultPanelData = {
+      configured,
+      lastRunAt: (sm as { lastRunAt?: string }).lastRunAt ?? null,
+      lastError: (sm as { lastError?: string | null }).lastError ?? null,
+      upcoming: upcoming.map(ser),
+      upcomingTotal,
+      recent: recent.map(ser),
+      upcomingHref: leadsHref(upcomingFilter),
+    };
+    return { rows, total, users, views, consult };
   });
-  const { rows, total, users, views, page } = data;
+  const { rows, total, users, views, consult, page } = data;
   const query = filterToParams(filter).toString();
   const pages = Math.max(1, Math.ceil(total / params.per));
   const single = (v: string[] | undefined) => (v?.length === 1 ? v[0] : "");
@@ -57,6 +82,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
           <Link className="btn-bloom" href="/leads/new">+ New lead</Link>
         </div>
       </div>
+
+      <ConsultationsPanel data={consult} />
 
       {views.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -103,7 +130,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
       </form>
 
       <LeadsTable
-        rows={rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), nextFollowUpAt: r.nextFollowUpAt?.toISOString() ?? null }))}
+        rows={rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), nextFollowUpAt: r.nextFollowUpAt?.toISOString() ?? null, nextConsultAt: r.nextConsultAt ? new Date(r.nextConsultAt).toISOString() : null }))}
         sort={params.sort}
         dir={params.dir}
         query={query}

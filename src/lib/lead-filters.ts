@@ -48,6 +48,8 @@ export const leadFilterSchema = z.object({
   awaiting: flag.catch(undefined),
   /** "no": never contacted (no outbound contact logged); "yes": contacted at least once */
   contacted: z.enum(["yes", "no"]).optional().catch(undefined),
+  /** "upcoming": has a confirmed Setmore consultation from now on */
+  consult: z.enum(["upcoming"]).optional().catch(undefined),
   decided: flag.catch(undefined),
   returning: flag.catch(undefined),
   has_dupes: flag.catch(undefined),
@@ -193,6 +195,7 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   if (f.returning) c.push(eq(leads.returningInquiry, true));
   if (f.import_batch) c.push(eq(leads.importBatchId, f.import_batch));
   if (f.awaiting) c.push(awaitingFollowUpSql(wc.now, wc.settings.followUps.newLeadNoContactHours));
+  if (f.consult === "upcoming") c.push(sql`exists (select 1 from appointments a where a.lead_id = ${leads.id} and a.status = 'confirmed' and a.starts_at >= ${wc.now.toISOString()}::timestamptz)`);
   if (f.contacted === "no") c.push(isNull(leads.lastContactedAt));
   if (f.contacted === "yes") c.push(isNotNull(leads.lastContactedAt));
   if (f.follow_up) {
@@ -229,6 +232,7 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.awaiting) out.push("awaiting follow-up");
   if (f.decided) out.push("won or lost");
   if (f.follow_up) out.push(`follow-up ${f.follow_up}`);
+  if (f.consult) out.push("consultation booked");
   if (f.contacted) out.push(f.contacted === "no" ? "never contacted" : "contacted");
   if (f.returning) out.push("returning inquiries");
   if (f.has_dupes) out.push("possible duplicates");

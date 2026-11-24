@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
 import { configuredCalendars, inspectCalendars, runGoodshuffleSync } from "@/server/integrations/goodshuffle";
+import { runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,6 +55,15 @@ async function handle(req: NextRequest) {
     } catch (e) {
       console.error("[cron] goodshuffle sync failed", e);
       out.goodshuffle = { error: (e as Error).message };
+      failed = true;
+    }
+  }
+  if (setmoreConfigured()) {
+    try {
+      out.setmore = await runSetmoreSync(orgId, setmoreRestClient(process.env.SETMORE_REFRESH_TOKEN!.trim()));
+    } catch (e) {
+      console.error("[cron] setmore sync failed", e);
+      out.setmore = { error: (e as Error).message };
       failed = true;
     }
   }

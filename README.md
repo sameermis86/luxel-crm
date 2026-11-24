@@ -98,3 +98,5 @@ CSV import ─────────────────────┘   
 - **Business hours default to Mon–Fri 9–5 Toronto** for the "2 business hours" first follow-up. Change in Settings if Saturdays count.
 - **Contact forms use a Wix Automation** (token in the URL), because Velo documents no Wix Forms backend event for Editor sites and Automations document no custom headers.
 - **Lost stages from the interim tracker** map to `lost` with the furthest stage they reached (after quote → reached proposal), so the historical funnel is right: no consult → `no_response`, after consult / after quote → `other` with the detail kept.
+
+Setmore consultations (read-only, on the Leads page): see `docs/setmore.md`.

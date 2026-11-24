@@ -78,6 +78,13 @@
       "when": 1795484552645,
       "tag": "0010_drop_score",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795485760301,
+      "tag": "0011_appointments",
+      "breakpoints": true
     }
   ]
 }

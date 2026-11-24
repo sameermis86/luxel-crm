@@ -371,6 +371,38 @@ export const integrationState = pgTable(
   (t) => [primaryKey({ columns: [t.orgId, t.key] })],
 );
 
+/** Bookings pulled from a scheduler (Setmore). Read-only copy; matched to a lead by email/phone. */
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    source: text("source").notNull(), // "setmore"
+    externalId: text("external_id").notNull(),
+    leadId: uuid("lead_id").references(() => leads.id),
+    customerExternalId: text("customer_external_id"),
+    customerName: text("customer_name"),
+    email: text("email"),
+    emailNormalized: text("email_normalized"),
+    phoneE164: text("phone_e164"),
+    serviceName: text("service_name"),
+    staffName: text("staff_name"),
+    startsAt: ts("starts_at").notNull(),
+    endsAt: ts("ends_at"),
+    status: text("status").notNull(), // confirmed | cancelled
+    label: text("label"),
+    notes: text("notes"),
+    syncedAt: ts("synced_at").notNull().defaultNow(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("appointments_org_source_ext").on(t.orgId, t.source, t.externalId),
+    index("appointments_org_starts").on(t.orgId, t.startsAt),
+    index("appointments_lead").on(t.leadId),
+  ],
+);
+export type Appointment = typeof appointments.$inferSelect;
+
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type LeadEvent = typeof leadEvents.$inferSelect;

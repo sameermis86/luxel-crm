@@ -24,6 +24,8 @@ export const listColumns = {
   nextFollowUpAt: leads.nextFollowUpAt,
   proposalSentAt: leads.proposalSentAt,
   lastContactedAt: leads.lastContactedAt,
+  /** next confirmed consultation booked in Setmore (null when none) */
+  nextConsultAt: sql<string | null>`(select min(a.starts_at) from appointments a where a.lead_id = ${leads.id} and a.status = 'confirmed' and a.starts_at >= now())`,
   createdAt: leads.createdAt,
   returningInquiry: leads.returningInquiry,
   duplicateOfId: leads.duplicateOfId,

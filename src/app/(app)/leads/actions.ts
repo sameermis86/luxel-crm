@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { withCtx } from "@/db/client";
-import { notifications, savedViews, LOST_REASONS, STATUSES, QUALIFICATIONS, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
+import { appointments, notifications, savedViews, LOST_REASONS, STATUSES, QUALIFICATIONS, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
 import { requireSession, ctxFor, authorize, ForbiddenError } from "@/server/auth";
 import {
   updateLead,
@@ -375,4 +375,45 @@ export async function deleteViewAction(id: string) {
   const ctx = ctxFor(session);
   await withCtx(ctx, (tx) => tx.delete(savedViews).where(inArray(savedViews.id, [id])));
   revalidatePath("/leads");
+}
+
+/* ----------------------------- Setmore ------------------------------------- */
+
+/** A Setmore booking with no matching lead → a new lead (status follows the booking), linked to it. */
+export async function addLeadFromAppointmentAction(appointmentId: string): Promise<ActionResult> {
+  const session = await requireSession();
+  let leadId = "";
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const id = z.string().uuid().parse(appointmentId);
+    const ctx = ctxFor(session);
+    return withCtx(ctx, async (tx) => {
+      const [a] = await tx.select().from(appointments).where(eq(appointments.id, id));
+      if (!a) throw new LeadError("Booking not found");
+      if (a.leadId) {
+        leadId = a.leadId;
+        return;
+      }
+      const now = new Date();
+      const when = a.startsAt.toLocaleString("en-CA", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" });
+      const r = await ingestLead(
+        tx,
+        ctx,
+        {
+          fullName: a.customerName,
+          email: a.email,
+          phone: a.phoneE164,
+          status: a.status === "confirmed" ? (a.startsAt >= now ? "consult_scheduled" : "consult_held") : "new",
+          message: `${a.status === "cancelled" ? "Cancelled booking" : "Booked"} in Setmore: ${a.serviceName ?? "consultation"} on ${when}`,
+          explicitSource: "other",
+          sourceDetail: "Setmore booking",
+        },
+        { mode: "manual", rawPayload: { form: "setmore", appointmentId: a.externalId } },
+      );
+      leadId = r.lead!.id;
+      await tx.update(appointments).set({ leadId }).where(eq(appointments.id, id));
+    });
+  });
+  if (res.ok) revalidatePath("/leads");
+  return res.ok ? { ok: true, data: { leadId }, message: "Lead added" } : res;
 }

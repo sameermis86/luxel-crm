@@ -23,6 +23,7 @@ export interface Row {
   status: Status;
   ownerName: string | null;
   nextFollowUpAt: string | null;
+  nextConsultAt?: string | null;
   createdAt: string;
   returningInquiry: boolean;
   duplicateOfId?: string | null;
@@ -36,6 +37,7 @@ const COLS: { key: string; label: string; sort?: string }[] = [
   { key: "qualification", label: "Qualification", sort: "qualification" },
   { key: "status", label: "Status", sort: "status" },
   { key: "owner", label: "Owner" },
+  { key: "consult", label: "Consultation" },
   { key: "next_follow_up", label: "Next follow-up", sort: "next_follow_up" },
 ];
 
@@ -148,6 +150,13 @@ export function LeadsTable(props: {
                   <td className="td"><QualBadge q={r.qualification} /></td>
                   <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} /></td>
                   <td className="td whitespace-nowrap">{r.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
+                  <td className="td whitespace-nowrap tabular">
+                    {r.nextConsultAt ? (
+                      <span className="chip border-stem/30 bg-stem-soft text-stem" title="Booked in Setmore">
+                        {new Date(r.nextConsultAt).toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    ) : <span className="text-muted">—</span>}
+                  </td>
                   <td className={`td whitespace-nowrap tabular ${overdue ? "font-medium text-bloom" : ""}`}>
                     {r.nextFollowUpAt ? fmtRelative(r.nextFollowUpAt, now) : <span className="text-muted">none</span>}
                   </td>
