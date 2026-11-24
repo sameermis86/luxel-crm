@@ -144,3 +144,30 @@ export function matchLeadByName(
   const hits = leads.filter((l) => norm(`${l.firstName ?? ""} ${l.lastName ?? ""}`) === n);
   return hits.length === 1 ? hits[0].id : null;
 }
+
+/** Free email providers: a domain here is never a company, so "mark the whole company" isn't offered. */
+export const PUBLIC_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com", "hotmail.com", "hotmail.ca", "outlook.com", "live.com", "live.ca", "msn.com",
+  "yahoo.com", "yahoo.ca", "icloud.com", "me.com", "mac.com", "aol.com", "rogers.com", "bell.net", "sympatico.ca",
+  "protonmail.com", "proton.me", "shaw.ca", "telus.net", "cogeco.ca",
+];
+
+/** One entry per line or comma: an email, or a domain written "@planner.ca" or "planner.ca". */
+export function parseContactList(text: string): string[] {
+  const out = text
+    .split(/[\n,;]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean)
+    .map((x) => (x.includes("@") && !x.startsWith("@") ? x : "@" + x.replace(/^@/, "")));
+  return [...new Set(out)];
+}
+
+export const emailDomain = (email: string) => email.split("@")[1]?.toLowerCase() ?? "";
+
+/** Is this email a planner/partner on the list (exact email, or its domain)? */
+export function isExcludedContact(email: string | null | undefined, list: string[]): boolean {
+  if (!email || !list.length) return false;
+  const e = email.trim().toLowerCase();
+  const d = "@" + emailDomain(e);
+  return list.some((x) => x === e || x === d);
+}

@@ -67,6 +67,20 @@ export default async function SettingsPage() {
           <p className="mt-2 text-xs text-muted">Times are {s.businessHours.timezone}. The digest schedule itself is set in the job definition (08:00).</p>
         </section>
 
+        {/* Planners & partners */}
+        <section className="card p-5" id="planners">
+          <h2 className="text-[19px]">Planners &amp; partners</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            People who book Setmore meetings with you but aren&apos;t leads. Their bookings still show under Consultations, marked Planner,
+            but never create a lead, change a status or set a follow-up. Use <strong className="font-medium text-ink">Planner</strong> on a lead or a booking to add someone in one click.
+          </p>
+          <label className="mt-3 block max-w-xl">
+            <span className="label">Emails or company domains, one per line</span>
+            <textarea name="setmore.excludeContacts" rows={5} defaultValue={s.setmore.excludeContacts.join("\n")} placeholder={"kate@plannerstudio.ca\n@impresarioevents.ca"} className="input font-mono text-[13px]" />
+            <span className="hint">An email matches that person only; <code>@company.ca</code> matches everyone at that company.</span>
+          </label>
+        </section>
+
       </ActionForm>
 
       {/* Users */}

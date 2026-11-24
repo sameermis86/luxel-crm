@@ -26,6 +26,11 @@ the next booked time, and `/leads?consult=upcoming` lists every lead with a book
   4. An open lead with a consultation ahead isn't "awaiting follow-up": its overdue follow-ups are closed
      ("consultation booked in Setmore") and the next follow-up is set for the meeting. A follow-up someone
      set for later is left alone.
+- **Planners & partners** (`setmore.excludeContacts`, Settings → Planners & partners): emails, or whole
+  company domains (`@planner.ca`). Their bookings show in the panel marked *Planner* but never create a lead,
+  move a status or set a follow-up. Owners use **Planner** on a lead or a booking: it adds the email/domain and
+  archives the lead (plus other leads the sync created for that contact), closing open follow-ups. Owners can
+  **Restore lead** from an archived lead's page. Public email providers can't be marked as a company.
 - Between syncs, a booking with no matching lead shows **Add as lead**: it creates the lead (Consult scheduled if the
   booking is ahead, Consult held if it's past) through the normal intake path and links the booking.
 - Never creates, changes or cancels anything in Setmore.

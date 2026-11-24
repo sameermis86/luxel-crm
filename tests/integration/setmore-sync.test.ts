@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withCtx, closeDb } from "@/db/client";
 import { appointments, leads } from "@/db/schema";
 import { createLead } from "@/server/leads/service";
-import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, applyBookings, undoBookingWins, type SetmoreClient } from "@/server/integrations/setmore";
+import { runSetmoreSync, getSetmoreState, setmoreRestClient, planConsultStatuses, applyConsultStatuses, applyBookings, undoBookingWins, markPlanner, type SetmoreClient } from "@/server/integrations/setmore";
 import { leadEvents, followUps } from "@/db/schema";
 import { and, isNull } from "drizzle-orm";
 import { listLeads } from "@/server/leads/queries";
@@ -150,6 +150,44 @@ describe("Setmore sync", () => {
     await expect(withCtx(staffLike, (tx) => updateLead(tx, staffLike, keep, { status: "proposal_sent" }))).rejects.toThrow(/Only an owner/);
     const owner = { ...env.as(env.sameer), role: "owner" as const };
     await withCtx(owner, (tx) => updateLead(tx, owner, keep, { status: "proposal_sent" }));
+  });
+
+  it("planners: their bookings make no lead and no follow-up; marking one archives the lead and closes its follow-ups", async () => {
+    await withCtx(env.sys, (tx) =>
+      tx.insert(appointments).values([
+        { orgId: env.orgId, source: "setmore", externalId: "p1", customerName: "Kate Planner", email: "kate@plannerco.ca", emailNormalized: "kate@plannerco.ca", serviceName: "Phone Consultation - New Booking", startsAt: new Date("2026-11-22T15:00:00Z"), status: "confirmed" },
+        { orgId: env.orgId, source: "setmore", externalId: "p2", customerName: "Tom Planner", email: "tom@plannerco.ca", emailNormalized: "tom@plannerco.ca", serviceName: "Phone Consultation - New Booking", startsAt: new Date("2026-12-08T15:00:00Z"), status: "confirmed" },
+      ]),
+    );
+    // the sync already made a lead for Kate before anyone marked her
+    await applyBookings(env.sys, NOW);
+    const kate = (await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.emailNormalized, "kate@plannerco.ca"))))[0];
+    expect(kate.status).toBe("consult_held");
+    await withCtx(env.sys, async (tx) => {
+      const { setFollowUp } = await import("@/server/leads/service");
+      await setFollowUp(tx, env.sys, kate.id, { dueAt: new Date("2026-11-23T15:00:00Z") }, NOW);
+    });
+
+    // marking the company archives every lead the sync made for it (Kate and Tom) and closes follow-ups
+    const owner = { ...env.as(env.sameer), role: "owner" as const };
+    const r = await markPlanner(owner, { email: "kate@plannerco.ca", scope: "domain", leadId: kate.id }, NOW);
+    expect(r).toEqual({ entry: "@plannerco.ca", archived: 2 });
+    const after = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.sourceDetail, "Setmore booking")));
+    expect(after.filter((l) => l.email?.endsWith("@plannerco.ca")).every((l) => l.archivedAt)).toBe(true);
+    const open = await withCtx(env.sys, (tx) => tx.select().from(followUps).where(and(eq(followUps.leadId, kate.id), isNull(followUps.doneAt))));
+    expect(open).toEqual([]);
+    const settings = await withCtx(env.sys, (tx) => getSettings(tx, env.orgId));
+    expect(settings.setmore.excludeContacts).toEqual(["@plannerco.ca"]);
+    expect(settings.followUps.digestHour).toBe(8); // the rest of the settings untouched
+
+    // a new booking from that company makes nothing
+    await withCtx(env.sys, (tx) =>
+      tx.insert(appointments).values({ orgId: env.orgId, source: "setmore", externalId: "p3", customerName: "Ana Planner", email: "ana@plannerco.ca", emailNormalized: "ana@plannerco.ca", serviceName: "Phone Consultation - New Booking", startsAt: new Date("2026-12-09T15:00:00Z"), status: "confirmed" }),
+    );
+    expect(await applyBookings(env.sys, NOW)).toMatchObject({ created: 0, linkedByName: 0, followUpsMoved: 0 });
+    expect((await withCtx(env.sys, (tx) => tx.select().from(appointments).where(eq(appointments.externalId, "p3"))))[0].leadId).toBeNull();
+    // public email domains can't be marked as a company
+    await expect(markPlanner(owner, { email: "someone@gmail.com", scope: "domain" }, NOW)).rejects.toThrow(/public email provider/);
   });
 
   it("records a failure (e.g. bad token) without throwing away the last good numbers", async () => {

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { withCtx } from "@/db/client";
-import { appointments, notifications, savedViews, LOST_REASONS, STATUSES, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
+import { appointments, leads, notifications, savedViews, LOST_REASONS, STATUSES, EVENT_TYPES, SOURCES, TIERS } from "@/db/schema";
 import { requireSession, ctxFor, authorize, ForbiddenError } from "@/server/auth";
 import {
   updateLead,
@@ -420,4 +420,52 @@ export async function applyConsultStatusesAction(): Promise<ActionResult> {
     data: out,
     message: `Updated ${out.applied} lead${out.applied === 1 ? "" : "s"}${out.errors.length ? `; ${out.errors.length} couldn't move (${out.errors.slice(0, 3).map((e) => `${e.recordId}: ${e.error}`).join("; ")})` : ""}`,
   };
+}
+
+/** Owners: this contact is a planner/partner, not a lead (by email, or the whole company domain). */
+export async function markPlannerAction(input: { leadId?: string; appointmentId?: string; scope: "email" | "domain" }): Promise<ActionResult> {
+  const session = await requireSession();
+  let out = { entry: "", archived: 0 };
+  const res = await run(async () => {
+    authorize(session, "settings:manage");
+    const v = z
+      .object({ leadId: z.string().uuid().optional(), appointmentId: z.string().uuid().optional(), scope: z.enum(["email", "domain"]) })
+      .refine((x) => x.leadId || x.appointmentId, "Nothing to mark")
+      .parse(input);
+    const ctx = ctxFor(session);
+    const { email, leadId } = await withCtx(ctx, async (tx) => {
+      if (v.appointmentId) {
+        const [a] = await tx.select().from(appointments).where(eq(appointments.id, v.appointmentId));
+        if (!a) throw new LeadError("Booking not found");
+        return { email: a.emailNormalized ?? a.email, leadId: a.leadId };
+      }
+      const [l] = await tx.select({ email: leads.emailNormalized }).from(leads).where(eq(leads.id, v.leadId!));
+      if (!l) throw new LeadError("Lead not found");
+      return { email: l.email, leadId: v.leadId! };
+    });
+    if (!email) throw new LeadError("This contact has no email address");
+    const { markPlanner } = await import("@/server/integrations/setmore");
+    out = await markPlanner(ctx, { email, scope: v.scope, leadId });
+  });
+  if (!res.ok) return res;
+  revalidatePath("/leads");
+  revalidatePath("/settings");
+  revalidatePath("/");
+  return { ok: true, data: out, message: `${out.entry} added to planners & partners${out.archived ? `; ${out.archived} lead${out.archived === 1 ? "" : "s"} archived` : ""}` };
+}
+
+/** Owners: bring an archived lead back (e.g. marked as a planner by mistake). */
+export async function restoreLeadAction(leadId: string): Promise<ActionResult> {
+  const session = await requireSession();
+  const res = await run(async () => {
+    authorize(session, "settings:manage");
+    const id = z.string().uuid().parse(leadId);
+    const ctx = ctxFor(session);
+    await withCtx(ctx, (tx) => updateLead(tx, ctx, id, { archivedAt: null }, { allowReadOnly: true, payload: { via: "restore" } }));
+  });
+  if (res.ok) {
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/leads");
+  }
+  return res.ok ? { ok: true, message: "Lead restored" } : res;
 }

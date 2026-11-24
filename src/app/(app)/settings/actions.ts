@@ -7,6 +7,7 @@ import { withCtx } from "@/db/client";
 import { assignmentRules, orgSettings, users, EVENT_TYPES, SOURCES, ROLES } from "@/db/schema";
 import { requireSession, ctxFor, authorize, ForbiddenError } from "@/server/auth";
 import { settingsSchema, DEFAULT_SETTINGS } from "@/lib/config/defaults";
+import { parseContactList } from "@/lib/setmore";
 import { runNightly } from "@/server/jobs";
 
 type R = { ok: true; message: string } | { ok: false; error: string };
@@ -41,6 +42,10 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
       if (k.startsWith("$") || typeof raw !== "string") continue;
       if (k === "businessHours.timezone") {
         next.businessHours.timezone = raw;
+      } else if (k === "businessHours.days") {
+        next.businessHours.days.push(Number(raw)); // one checkbox per working day
+      } else if (k === "setmore.excludeContacts") {
+        next.setmore.excludeContacts = parseContactList(raw);
       } else if (raw.trim() !== "") {
         setPath(next, k, Number(raw.replace(/[$,]/g, "")));
       }

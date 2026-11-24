@@ -13,6 +13,7 @@ import { QuickActions } from "./quick-actions";
 import { Timeline } from "./timeline";
 import { EditDetails } from "./edit-details";
 import { CompleteFollowUpButton, DismissDuplicateButton, MarkSeen } from "./small-actions";
+import { PlannerButton, RestoreLeadButton } from "../planner-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,10 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const openFollowUps = followUps.filter((f) => !f.f.doneAt);
   const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status);
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
+  const isOwner = can(page.session, "settings:manage");
+  const archiveEvent = lead.archivedAt ? [...timeline].sort((a, b) => b.e.seq - a.e.seq).find((t) => t.e.field === "archivedAt" && t.e.newValue)?.e : null;
+  const archiveVia = (archiveEvent?.payload as { via?: string; entry?: string } | null) ?? null;
+  const archiveWhy = !archiveEvent ? null : archiveVia?.via === "planner" ? `marked as a planner/partner (${archiveVia.entry})` : "import undone";
 
   return (
     <div className="space-y-6">
@@ -44,7 +49,12 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           <Link className="font-medium underline" href={`/leads/${mergedInto.id}`}>{mergedInto.recordId}</Link>. It is read-only and kept so old links still work.
         </div>
       )}
-      {lead.archivedAt && <div className="rounded-xl border border-edge bg-paper-2/60 px-4 py-3 text-sm text-muted">Archived {fmtDateTime(lead.archivedAt)} (import undone). Read-only.</div>}
+      {lead.archivedAt && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge bg-paper-2/60 px-4 py-3 text-sm text-muted">
+          <span>Archived {fmtDateTime(lead.archivedAt)}{archiveWhy ? ` (${archiveWhy})` : ""}. Read-only.</span>
+          {isOwner && !lead.duplicateOfId && <RestoreLeadButton leadId={lead.id} />}
+        </div>
+      )}
       {duplicates.length > 0 && !readOnly && (
         <div className="rounded-xl border border-amber/30 bg-amber-soft/70 px-4 py-3 text-sm">
           <p className="font-medium text-amber">Possible duplicate{duplicates.length > 1 ? "s" : ""}</p>
@@ -85,6 +95,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             {lead.status === "lost" && lead.lostReason && <p className="mt-1 text-sm text-muted">Lost: {LOST_REASON_LABELS[lead.lostReason]}{lead.lostReasonDetail ? `: ${lead.lostReasonDetail}` : ""}</p>}
             {lead.status === "unqualified" && lead.unqualifiedReason && <p className="mt-1 text-sm text-muted">Unqualified: {lead.unqualifiedReason}</p>}
           </div>
+          {isOwner && !readOnly && lead.email && <PlannerButton leadId={lead.id} email={lead.email} />}
         </div>
         {!readOnly && (
           <QuickActions

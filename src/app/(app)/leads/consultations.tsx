@@ -7,6 +7,7 @@ import type { Status } from "@/db/schema";
 import { StatusPill } from "@/components/badges";
 import { STATUS_LABELS } from "@/lib/status";
 import { addLeadFromAppointmentAction, applyConsultStatusesAction } from "./actions";
+import { PlannerButton } from "./planner-actions";
 
 export interface ConsultRow {
   id: string;
@@ -18,6 +19,9 @@ export interface ConsultRow {
   leadId: string | null;
   recordId: string | null;
   leadStatus: string | null;
+  email: string | null;
+  /** on Settings → Planners & partners */
+  planner: boolean;
 }
 
 export interface ConsultPanelData {
@@ -29,6 +33,7 @@ export interface ConsultPanelData {
   recent: ConsultRow[];
   upcomingHref: string;
   /** Owners only: leads whose bookings support a forward status move. */
+  isOwner: boolean;
   statusPlan: { leadId: string; recordId: string; name: string; from: string; to: string; bookingAt: string }[] | null;
 }
 
@@ -64,9 +69,10 @@ export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
                   title="Coming up"
                   empty="No consultations booked in the next 30 days."
                   rows={data.upcoming}
+                  isOwner={data.isOwner}
                   footer={data.upcomingTotal > data.upcoming.length ? <Link href={data.upcomingHref} className="text-muted hover:text-ink">All {data.upcomingTotal} booked leads →</Link> : null}
                 />
-                <List title="Met in the last 14 days" empty="No consultations in the last 14 days." rows={data.recent} />
+                <List title="Met in the last 14 days" empty="No consultations in the last 14 days." rows={data.recent} isOwner={data.isOwner} />
               </div>
               <p className="border-t border-edge px-4 py-2 text-[11px] text-muted">
                 Synced {data.lastRunAt ? new Date(data.lastRunAt).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "not yet"} · bookings move lead statuses forward automatically on each sync
@@ -79,7 +85,7 @@ export function ConsultationsPanel({ data }: { data: ConsultPanelData }) {
   );
 }
 
-function List({ title, rows, empty, footer }: { title: string; rows: ConsultRow[]; empty: string; footer?: React.ReactNode }) {
+function List({ title, rows, empty, footer, isOwner }: { title: string; rows: ConsultRow[]; empty: string; footer?: React.ReactNode; isOwner: boolean }) {
   return (
     <div className="px-4 py-3">
       <h3 className="mb-1.5 text-xs font-medium tracking-wide text-muted uppercase" style={{ fontFamily: "var(--font-sans)" }}>{title}</h3>
@@ -87,7 +93,7 @@ function List({ title, rows, empty, footer }: { title: string; rows: ConsultRow[
         <p className="py-3 text-sm text-muted">{empty}</p>
       ) : (
         <ul className="divide-y divide-edge">
-          {rows.map((r) => <Item key={r.id} r={r} />)}
+          {rows.map((r) => <Item key={r.id} r={r} isOwner={isOwner} />)}
         </ul>
       )}
       {footer && <p className="mt-2 text-sm">{footer}</p>}
@@ -95,7 +101,7 @@ function List({ title, rows, empty, footer }: { title: string; rows: ConsultRow[
   );
 }
 
-function Item({ r }: { r: ConsultRow }) {
+function Item({ r, isOwner }: { r: ConsultRow; isOwner: boolean }) {
   const cancelled = r.status === "cancelled";
   return (
     <li className="flex items-center gap-3 py-2">
@@ -112,14 +118,19 @@ function Item({ r }: { r: ConsultRow }) {
           {cancelled && <span className="ml-1 text-bloom">· cancelled</span>}
         </div>
       </div>
-      <div className="shrink-0">
-        {r.leadId ? (
+      <div className="flex shrink-0 items-center gap-1.5">
+        {r.planner ? (
+          <span className="chip border-edge bg-card-2 text-muted" title="On Settings → Planners & partners: no lead, no follow-ups">Planner</span>
+        ) : r.leadId ? (
           <Link href={`/leads/${r.leadId}`} className="flex items-center gap-1.5 text-xs">
             <span className="tabular text-muted">{r.recordId}</span>
             {r.leadStatus && <StatusPill status={r.leadStatus as Status} />}
           </Link>
         ) : (
-          <AddLead id={r.id} />
+          <>
+            <AddLead id={r.id} />
+            {isOwner && r.email && <PlannerButton appointmentId={r.id} email={r.email} small />}
+          </>
         )}
       </div>
     </li>

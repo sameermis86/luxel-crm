@@ -13,6 +13,7 @@ import { Download, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { ConsultationsPanel, type ConsultPanelData } from "./consultations";
 import { countLeads } from "@/server/leads/queries";
 import { getSetmoreState, listAppointments, planConsultStatuses, setmoreConfigured } from "@/server/integrations/setmore";
+import { isExcludedContact } from "@/lib/setmore";
 import { leadsHref } from "@/lib/lead-filters";
 import { SaveViewForm, DeleteViewButton } from "./saved-views";
 
@@ -42,10 +43,16 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
           listAppointments(tx, new Date(p.now.getTime() - 14 * day), p.now, "desc", 6),
           countLeads(tx, upcomingFilter, p.wc),
           getSetmoreState(p.session.orgId),
-          isOwner ? planConsultStatuses(tx, p.now) : Promise.resolve([]),
+          isOwner ? planConsultStatuses(tx, p.now, p.settings.setmore.excludeContacts) : Promise.resolve([]),
         ])
       : [[], [], 0, {}, []];
-    const ser = (a: (typeof upcoming)[number]) => ({ ...a, startsAt: a.startsAt.toISOString() });
+    const exclude = p.settings.setmore.excludeContacts;
+    const ser = (a: (typeof upcoming)[number]) => ({
+      id: a.id, startsAt: a.startsAt.toISOString(), status: a.status, customerName: a.customerName, serviceName: a.serviceName, staffName: a.staffName,
+      leadId: a.leadId, recordId: a.recordId, leadStatus: a.leadStatus,
+      email: isOwner ? a.email : null, // owners need it to mark a planner
+      planner: isExcludedContact(a.emailNormalized, exclude),
+    });
     const consult: ConsultPanelData = {
       configured,
       lastRunAt: (sm as { lastRunAt?: string }).lastRunAt ?? null,
@@ -55,6 +62,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
       recent: recent.map(ser),
       upcomingHref: leadsHref(upcomingFilter),
       statusPlan: isOwner ? statusPlan : null,
+      isOwner,
     };
     return { rows, total, users, views, consult };
   });

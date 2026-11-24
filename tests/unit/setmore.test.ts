@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bookingToRow, matchLead, pickValue, plannedConsultStatus, statusForNewLead, matchLeadByName } from "@/lib/setmore";
+import { bookingToRow, matchLead, pickValue, plannedConsultStatus, statusForNewLead, matchLeadByName, parseContactList, isExcludedContact } from "@/lib/setmore";
 
 const cust = { id: "c1", first_name: "Sofia", last_name: "Rossi", email_addresses: [{ value: "old@x.com", deleted: true }, { value: "Sofia.Rossi@Gmail.com", primary: true }], phone_numbers: [{ value: "905-555-0123" }] };
 
@@ -74,5 +74,20 @@ describe("leads created from bookings", () => {
     expect(matchLeadByName("Ana Silva", leads)).toBeNull(); // ambiguous
     expect(matchLeadByName("Sofia", leads)).toBeNull(); // first name alone
     expect(matchLeadByName(null, leads)).toBeNull();
+  });
+});
+
+describe("planners & partners list", () => {
+  it("parses emails and domains, one per line or comma", () => {
+    expect(parseContactList(" Kate@Planner.ca\n@impresario.ca, studio.com\n\nkate@planner.ca")).toEqual(["kate@planner.ca", "@impresario.ca", "@studio.com"]);
+  });
+  it("matches an exact email or a whole domain, nothing else", () => {
+    const list = ["kate@planner.ca", "@impresario.ca"];
+    expect(isExcludedContact("KATE@planner.ca", list)).toBe(true);
+    expect(isExcludedContact("bob@planner.ca", list)).toBe(false);
+    expect(isExcludedContact("anyone@impresario.ca", list)).toBe(true);
+    expect(isExcludedContact("x@sub.impresario.ca", list)).toBe(false);
+    expect(isExcludedContact(null, list)).toBe(false);
+    expect(isExcludedContact("a@b.com", [])).toBe(false);
   });
 });

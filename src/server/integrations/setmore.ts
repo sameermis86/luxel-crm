@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { withCtx, systemCtx, type Ctx, type Tx } from "@/db/client";
-import { appointments, followUps, integrationState, leads, type Status } from "@/db/schema";
-import { bookingToRow, matchLead, matchLeadByName, plannedConsultStatus, statusForNewLead, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
+import { appointments, followUps, integrationState, leads, orgSettings, type Status } from "@/db/schema";
+import { bookingToRow, emailDomain, isExcludedContact, PUBLIC_EMAIL_DOMAINS, matchLead, matchLeadByName, plannedConsultStatus, statusForNewLead, type SmBooking, type SmCustomer, type SmNamed } from "@/lib/setmore";
 import { updateLead, setFollowUp, completeFollowUp, LeadError } from "@/server/leads/service";
 import { ingestLead } from "@/server/leads/intake";
 import { getSettings } from "@/server/settings";
@@ -185,6 +185,7 @@ export async function listAppointments(tx: Tx, from: Date, to: Date, order: "asc
       status: appointments.status,
       customerName: appointments.customerName,
       email: appointments.email,
+      emailNormalized: appointments.emailNormalized,
       serviceName: appointments.serviceName,
       staffName: appointments.staffName,
       leadId: appointments.leadId,
@@ -210,7 +211,7 @@ export interface ConsultStatusChange {
 }
 
 /** Leads whose Setmore bookings support a forward move (see `plannedConsultStatus`). */
-export async function planConsultStatuses(tx: Tx, now = new Date()): Promise<ConsultStatusChange[]> {
+export async function planConsultStatuses(tx: Tx, now = new Date(), exclude: string[] = []): Promise<ConsultStatusChange[]> {
   const rows = await tx
     .select({
       leadId: leads.id,
@@ -221,12 +222,14 @@ export async function planConsultStatuses(tx: Tx, now = new Date()): Promise<Con
       startsAt: appointments.startsAt,
       endsAt: appointments.endsAt,
       apptStatus: appointments.status,
+      email: appointments.emailNormalized,
     })
     .from(appointments)
     .innerJoin(leads, eq(leads.id, appointments.leadId))
     .where(and(eq(appointments.source, "setmore"), isNull(leads.duplicateOfId), isNull(leads.archivedAt)));
   const byLead = new Map<string, typeof rows>();
-  for (const r of rows) byLead.set(r.leadId, [...(byLead.get(r.leadId) ?? []), r]);
+  // planners' bookings never move a lead
+  for (const r of rows) if (!isExcludedContact(r.email, exclude)) byLead.set(r.leadId, [...(byLead.get(r.leadId) ?? []), r]);
   const out: ConsultStatusChange[] = [];
   for (const [leadId, list] of byLead) {
     const l = list[0];
@@ -238,7 +241,7 @@ export async function planConsultStatuses(tx: Tx, now = new Date()): Promise<Con
 
 /** Applies the current plan through updateLead (audited, tagged via: "setmore"). Re-plans inside, so it's never stale. */
 export async function applyConsultStatuses(ctx: Ctx, now = new Date()) {
-  const plan = await withCtx(ctx, (tx) => planConsultStatuses(tx, now));
+  const plan = await withCtx(ctx, async (tx) => planConsultStatuses(tx, now, (await getSettings(tx, ctx.orgId)).setmore.excludeContacts));
   let applied = 0;
   const errors: { recordId: string; error: string }[] = [];
   for (const c of plan) {
@@ -271,7 +274,9 @@ export async function applyBookings(ctx: Ctx, now = new Date()) {
   // 1. unmatched bookings, grouped by person
   const loose = await withCtx(ctx, (tx) => tx.select().from(appointments).where(and(eq(appointments.source, "setmore"), isNull(appointments.leadId))));
   const people = new Map<string, typeof loose>();
+  const exclude = settings.setmore.excludeContacts;
   for (const a of loose) {
+    if (isExcludedContact(a.emailNormalized, exclude)) continue; // planners & partners aren't leads
     const key = a.emailNormalized ?? a.phoneE164 ?? a.customerExternalId ?? a.externalId;
     people.set(key, [...(people.get(key) ?? []), a]);
   }
@@ -330,23 +335,28 @@ export async function applyBookings(ctx: Ctx, now = new Date()) {
   errors.push(...st.errors.map((e) => ({ what: e.recordId, error: e.error })));
 
   // 3. a consultation ahead replaces an overdue (or missing) follow-up
-  const ahead = await withCtx(ctx, (tx) =>
+  const aheadRows = await withCtx(ctx, (tx) =>
     tx
-      .select({ leadId: appointments.leadId, startsAt: sql<Date>`min(${appointments.startsAt})`.mapWith((v) => new Date(v)), status: leads.status })
+      .select({ leadId: appointments.leadId, startsAt: appointments.startsAt, email: appointments.emailNormalized, status: leads.status })
       .from(appointments)
       .innerJoin(leads, eq(leads.id, appointments.leadId))
-      .where(and(eq(appointments.source, "setmore"), eq(appointments.status, "confirmed"), gt(appointments.startsAt, now), isNull(leads.duplicateOfId), isNull(leads.archivedAt)))
-      .groupBy(appointments.leadId, leads.status),
+      .where(and(eq(appointments.source, "setmore"), eq(appointments.status, "confirmed"), gt(appointments.startsAt, now), isNull(leads.duplicateOfId), isNull(leads.archivedAt))),
   );
-  for (const a of ahead) {
+  const soonest = new Map<string, { leadId: string; startsAt: Date; status: Status }>();
+  for (const r of aheadRows) {
+    if (!r.leadId || isExcludedContact(r.email, exclude)) continue;
+    const cur = soonest.get(r.leadId);
+    if (!cur || r.startsAt < cur.startsAt) soonest.set(r.leadId, { leadId: r.leadId, startsAt: r.startsAt, status: r.status });
+  }
+  for (const a of soonest.values()) {
     if (!a.leadId || CLOSED.includes(a.status)) continue;
     try {
       await withCtx(ctx, async (tx) => {
-        const open = await tx.select().from(followUps).where(and(eq(followUps.leadId, a.leadId!), isNull(followUps.doneAt)));
+        const open = await tx.select().from(followUps).where(and(eq(followUps.leadId, a.leadId), isNull(followUps.doneAt)));
         const overdue = open.filter((f) => f.dueAt <= now);
         if (open.length > overdue.length) return; // someone already planned the next touch
         for (const f of overdue) await completeFollowUp(tx, ctx, f.id, now, { reason: "consultation booked in Setmore" });
-        await setFollowUp(tx, ctx, a.leadId!, { dueAt: a.startsAt, note: "Consultation booked in Setmore: follow up after the meeting" }, now);
+        await setFollowUp(tx, ctx, a.leadId, { dueAt: a.startsAt, note: "Consultation booked in Setmore: follow up after the meeting" }, now);
         followUpsMoved++;
       });
     } catch (e) {
@@ -394,4 +404,45 @@ export async function undoBookingWins(ctx: Ctx, now = new Date()) {
     }
   }
   return { moved, errors };
+}
+
+/**
+ * "Mark as planner": adds the email (or its company domain) to setmore.excludeContacts and archives
+ * the lead it came from, plus any other lead the booking sync created for that contact. Owners only
+ * (the caller authorizes). Archived leads drop out of follow-ups, the leads list and the dashboard.
+ */
+export async function markPlanner(ctx: Ctx, input: { email: string; scope: "email" | "domain"; leadId?: string | null }, now = new Date()) {
+  const email = input.email.trim().toLowerCase();
+  const domain = emailDomain(email);
+  if (!domain) throw new LeadError("This contact has no email address");
+  if (input.scope === "domain" && PUBLIC_EMAIL_DOMAINS.includes(domain)) throw new LeadError(`${domain} is a public email provider: mark the email instead`);
+  const entry = input.scope === "domain" ? "@" + domain : email;
+
+  return withCtx(ctx, async (tx) => {
+    const settings = await getSettings(tx, ctx.orgId);
+    const list = [...new Set([...settings.setmore.excludeContacts, entry])];
+    const [row] = await tx.select().from(orgSettings).where(eq(orgSettings.orgId, ctx.orgId));
+    const stored = (row?.settings ?? {}) as Record<string, any>;
+    const value = { ...stored, setmore: { ...(stored.setmore ?? {}), excludeContacts: list } };
+    await tx
+      .insert(orgSettings)
+      .values({ orgId: ctx.orgId, settings: value, updatedBy: ctx.userId, updatedAt: now })
+      .onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: value, updatedBy: ctx.userId, updatedAt: now } });
+
+    // the lead it was marked on, plus other leads the booking sync created for this contact
+    const fromSync = await tx
+      .select({ id: leads.id, email: leads.emailNormalized })
+      .from(leads)
+      .where(and(eq(leads.sourceDetail, "Setmore booking"), isNull(leads.archivedAt), isNull(leads.duplicateOfId)));
+    const ids = new Set(fromSync.filter((l) => isExcludedContact(l.email, [entry])).map((l) => l.id));
+    if (input.leadId) ids.add(input.leadId);
+    let archived = 0;
+    for (const id of ids) {
+      const open = await tx.select({ id: followUps.id }).from(followUps).where(and(eq(followUps.leadId, id), isNull(followUps.doneAt)));
+      for (const f of open) await completeFollowUp(tx, ctx, f.id, now, { reason: "marked as planner" });
+      const r = await updateLead(tx, ctx, id, { archivedAt: now }, { now, payload: { via: "planner", entry } });
+      if (r.changed.length) archived++;
+    }
+    return { entry, archived };
+  });
 }
