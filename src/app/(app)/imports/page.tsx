@@ -11,6 +11,8 @@ import { ImportWizard } from "./import-wizard";
 import { UndoButton } from "./undo-button";
 import { WixSyncPanel } from "./wix-sync-panel";
 import { getSyncState } from "@/server/intake/wix-sync";
+import { GoodshufflePanel } from "./goodshuffle-panel";
+import { configuredCalendars, getGsState, getGsSettings } from "@/server/integrations/goodshuffle";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // "Sync now" can import a backlog
@@ -27,6 +29,7 @@ export default async function ImportsPage() {
   if (!can(page.session, "imports:create")) redirect("/leads");
   const canUndo = can(page.session, "imports:undo");
   const sync = await getSyncState(page.session.orgId);
+  const [gs, gsSettings] = await Promise.all([getGsState(page.session.orgId), getGsSettings(page.session.orgId)]);
 
   return (
     <div className="space-y-6">
@@ -45,6 +48,21 @@ export default async function ImportsPage() {
           lastError: sync.lastError ?? null,
           lastResult: (sync.lastResult as unknown as Record<string, number>) ?? null,
           liveSince: sync.liveSince ?? null,
+        }}
+      />
+
+      <GoodshufflePanel
+        isOwner={can(page.session, "settings:manage")}
+        data={{
+          configured: Object.keys(configuredCalendars()),
+          autoApply: gsSettings.autoApply,
+          lastRunAt: gs.lastRunAt ?? null,
+          mode: gs.mode ?? null,
+          events: gs.events ?? 0,
+          alreadyInStep: gs.alreadyInStep ?? 0,
+          lastError: gs.lastError ?? null,
+          changes: gs.changes ?? [],
+          unmatched: gs.unmatched ?? [],
         }}
       />
 

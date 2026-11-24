@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
+import { configuredCalendars, inspectCalendars, runGoodshuffleSync } from "@/server/integrations/goodshuffle";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,19 +18,45 @@ async function handle(req: NextRequest) {
   const ok = !!secret && secret.length >= 16 && auth.length === secret.length + 7 && timingSafeEqual(Buffer.from(auth), Buffer.from(`Bearer ${secret}`));
   if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const apiKey = process.env.WIX_API_KEY;
-  const siteId = process.env.WIX_SITE_ID;
-  if (!apiKey || !siteId) return NextResponse.json({ error: "WIX_API_KEY / WIX_SITE_ID not configured" }, { status: 503 });
   const orgId = await resolveOrgId();
   if (!orgId) return NextResponse.json({ error: "org not found" }, { status: 500 });
 
-  try {
-    const result = await runWixSync(orgId, wixRestClient(apiKey, siteId));
-    return NextResponse.json({ ok: true, ...result });
-  } catch (e) {
-    console.error("[cron/wix-sync] failed", e);
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+  // ?inspect=goodshuffle: masked shape of the Goodshuffle calendars (no client details)
+  if (req.nextUrl.searchParams.get("inspect") === "goodshuffle") {
+    try {
+      return NextResponse.json({ ok: true, calendars: await inspectCalendars() });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    }
   }
+
+  const out: Record<string, unknown> = { ok: true };
+  let failed = false;
+  const apiKey = process.env.WIX_API_KEY;
+  const siteId = process.env.WIX_SITE_ID;
+  if (apiKey && siteId) {
+    try {
+      out.wix = await runWixSync(orgId, wixRestClient(apiKey, siteId));
+    } catch (e) {
+      console.error("[cron] wix sync failed", e);
+      out.wix = { error: (e as Error).message };
+      failed = true;
+    }
+  } else out.wix = { skipped: "WIX_API_KEY / WIX_SITE_ID not configured" };
+
+  if (Object.keys(configuredCalendars()).length) {
+    try {
+      const g = await runGoodshuffleSync(orgId);
+      out.goodshuffle = { mode: g.mode, events: g.events, changes: g.changes?.length ?? 0, applied: g.changes?.filter((c) => c.applied).length ?? 0, unmatched: g.unmatched?.length ?? 0 };
+    } catch (e) {
+      console.error("[cron] goodshuffle sync failed", e);
+      out.goodshuffle = { error: (e as Error).message };
+      failed = true;
+    }
+  }
+  // keep the old top-level shape for the Wix result (status panel / GitHub log)
+  if (out.wix && typeof out.wix === "object" && !("error" in (out.wix as object))) Object.assign(out, out.wix);
+  return NextResponse.json({ ...out, ok: !failed }, { status: failed ? 502 : 200 });
 }
 
 export const GET = handle;

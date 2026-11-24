@@ -93,3 +93,31 @@ export async function syncWixNowAction(): Promise<R<{ created: number; attached:
   revalidatePath("/leads");
   return res;
 }
+
+/* ----------------------------- Goodshuffle --------------------------------- */
+
+export async function goodshuffleRunAction(mode: "preview" | "apply"): Promise<R<{ changes: number; applied: number; unmatched: number }>> {
+  const session = await requireSession();
+  const res = await guard(async () => {
+    authorize(session, mode === "apply" ? "settings:manage" : "imports:create");
+    const { runGoodshuffleSync, configuredCalendars } = await import("@/server/integrations/goodshuffle");
+    if (!Object.keys(configuredCalendars()).length) throw new LeadError("No Goodshuffle calendars configured yet");
+    const s = await runGoodshuffleSync(session.orgId, { mode });
+    return { changes: s.changes?.length ?? 0, applied: s.changes?.filter((c) => c.applied).length ?? 0, unmatched: s.unmatched?.length ?? 0 };
+  });
+  revalidatePath("/imports");
+  revalidatePath("/leads");
+  return res;
+}
+
+export async function goodshuffleAutoApplyAction(on: boolean): Promise<R<{ autoApply: boolean }>> {
+  const session = await requireSession();
+  const res = await guard(async () => {
+    authorize(session, "settings:manage");
+    const { setGsAutoApply } = await import("@/server/integrations/goodshuffle");
+    await setGsAutoApply(session.orgId, on);
+    return { autoApply: on };
+  });
+  revalidatePath("/imports");
+  return res;
+}
