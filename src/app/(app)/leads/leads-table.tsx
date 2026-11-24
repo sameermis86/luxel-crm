@@ -17,6 +17,8 @@ export interface Row {
   partnerName: string | null;
   eventType: EventType;
   eventDate: string | null;
+  venueName?: string | null;
+  venueCity?: string | null;
   source: Source;
   status: Status;
   ownerName: string | null;
@@ -31,6 +33,7 @@ const COLS: { key: string; label: string; sort?: string }[] = [
   { key: "record_id", label: "Record", sort: "record_id" },
   { key: "name", label: "Name", sort: "name" },
   { key: "event_date", label: "Event", sort: "event_date" },
+  { key: "venue", label: "Venue", sort: "venue" },
   { key: "source", label: "Source", sort: "source" },
   { key: "status", label: "Status", sort: "status" },
   { key: "owner", label: "Owner" },
@@ -100,6 +103,7 @@ export function LeadsTable(props: {
                   <span className="mt-0.5 block truncate text-xs text-muted">
                     <span className="font-mono">{r.recordId}</span> · {titleCase(r.eventType)} · {fmtDate(r.eventDate)}
                   </span>
+                  {(r.venueName || r.venueCity) && <span className="mt-0.5 block truncate text-xs text-muted">{[r.venueName, r.venueCity].filter(Boolean).join(", ")}</span>}
                 </Link>
                 <StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} canUndoWin={props.canUndoWin} />
               </div>
@@ -114,7 +118,7 @@ export function LeadsTable(props: {
       </ul>
 
       <div className="card hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[980px] border-collapse">
+        <table className="w-full min-w-[1140px] border-collapse">
           <thead className="sticky top-0 z-10 border-b border-edge bg-card-2">
             <tr>
               {props.canBulk && (
@@ -170,6 +174,14 @@ export function LeadsTable(props: {
                   <td className="td whitespace-nowrap">
                     {fmtDate(r.eventDate)}
                     <div className="text-xs text-muted">{titleCase(r.eventType)}</div>
+                  </td>
+                  <td className="td max-w-[220px]">
+                    {r.venueName || r.venueCity ? (
+                      <>
+                        <span className="block truncate" title={r.venueName ?? undefined}>{r.venueName ?? <span className="text-muted">Venue TBD</span>}</span>
+                        {r.venueCity && <span className="block truncate text-xs text-muted">{r.venueCity}</span>}
+                      </>
+                    ) : <span className="text-muted">—</span>}
                   </td>
                   <td className="td whitespace-nowrap">{titleCase(r.source)}</td>
                   <td className="td"><StatusCell leadId={r.id} recordId={r.recordId} status={r.status} readOnly={!!r.duplicateOfId} canUndoWin={props.canUndoWin} /></td>

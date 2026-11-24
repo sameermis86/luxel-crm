@@ -15,6 +15,7 @@ export const listColumns = {
   eventType: leads.eventType,
   eventDate: leads.eventDate,
   venueName: leads.venueName,
+  venueCity: leads.venueCity,
   source: leads.source,
   captureChannel: leads.captureChannel,
   goodshuffleStatus: leads.goodshuffleStatus,

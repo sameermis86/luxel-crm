@@ -68,6 +68,7 @@ export const SORTABLE = {
   record_id: leads.recordId,
   name: sql`lower(coalesce(${leads.lastName}, '') || ' ' || coalesce(${leads.firstName}, ''))`,
   event_date: leads.eventDate,
+  venue: sql`lower(${leads.venueName})`,
   source: leads.source,
   status: leads.status,
   next_follow_up: leads.nextFollowUpAt,
