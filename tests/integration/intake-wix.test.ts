@@ -90,15 +90,15 @@ describe("POST /api/intake/wix", () => {
     expect([await count(), await evCount()]).toEqual(before);
   });
 
-  it("a new submission from the same person attaches to the existing lead as a returning inquiry", async () => {
+  it("a new submission from the same person attaches to the existing lead quietly (same client, no flag)", async () => {
     const res = await post(quote("qb-2", { email: "Sofia.Rossi+again@gmail.com", message: "Following up!" }), "bearer");
     const json = await res.json();
     expect(json.outcome).toBe("attached");
     const rows = await withCtx(env.sys, (tx) => tx.select().from(leads).where(eq(leads.emailNormalized, "sofiarossi@gmail.com")));
     expect(rows.length).toBe(1);
-    expect(rows[0].returningInquiry).toBe(true);
+    expect(rows[0].returningInquiry).toBe(false);
     const ev = await withCtx(env.sys, (tx) => tx.select().from(leadEvents).where(and(eq(leadEvents.leadId, rows[0].id), eq(leadEvents.type, "returning_inquiry"))));
-    expect(ev.length).toBe(1);
+    expect(ev.length).toBe(1); // the submission stays on the timeline
   });
 
   it("medium-confidence matches create a lead plus a duplicate candidate", async () => {

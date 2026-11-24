@@ -1,6 +1,6 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { onCommit, type Ctx, type Tx } from "@/db/client";
-import { followUps, intakeSubmissions, leads, type Lead, type Source } from "@/db/schema";
+import { intakeSubmissions, leads, type Lead, type Source } from "@/db/schema";
 import { resolveSource, type IntakeForm } from "@/lib/source";
 import { addBusinessHours } from "@/lib/business-hours";
 import { splitFullName } from "@/lib/normalize";
@@ -87,11 +87,6 @@ export function blanksOnly(existing: Lead, incoming: Partial<LeadFields>): Parti
   return patch as Partial<LeadFields>;
 }
 
-async function hasOpenFollowUp(tx: Tx, leadId: string) {
-  const [r] = await tx.select({ id: followUps.id }).from(followUps).where(and(eq(followUps.leadId, leadId), isNull(followUps.doneAt))).limit(1);
-  return !!r;
-}
-
 /**
  * The intake pipeline shared by the Wix webhook, manual entry and CSV import:
  *   idempotency → normalize → duplicate check → qualify → assign → first follow-up
@@ -147,6 +142,8 @@ export async function ingestLead(tx: Tx, ctx: Ctx, input: IngestInput, opts: Ing
       let target = existing;
       while (target?.duplicateOfId) [target] = await tx.select().from(leads).where(eq(leads.id, target.duplicateOfId));
       const patch = blanksOnly(target, fields);
+      // the same client submitting again (e.g. Contact Us, then the Quote Builder) is the same lead:
+      // keep the submission on its timeline, but no flag, no extra follow-up, no alert
       if (policy === "attach") {
         await writeEvents(tx, ctx, target.id, [
           {
@@ -159,14 +156,10 @@ export async function ingestLead(tx: Tx, ctx: Ctx, input: IngestInput, opts: Ing
         tx,
         ctx,
         target.id,
-        { ...patch, ...(policy === "attach" ? { returningInquiry: true } : {}) },
-        { now, settings, payload: { via: policy === "attach" ? "returning_inquiry" : "import_merge", importBatchId: opts.importBatchId ?? null } },
+        patch,
+        { now, settings, payload: { via: policy === "attach" ? "repeat_submission" : "import_merge", importBatchId: opts.importBatchId ?? null } },
       );
-      if (policy === "attach" && opts.autoFollowUp !== false && !(await hasOpenFollowUp(tx, lead.id))) {
-        await setFollowUp(tx, ctx, lead.id, { dueAt: addBusinessHours(now, settings.followUps.firstResponseBusinessHours, settings.businessHours), note: "Returning inquiry: respond" }, now);
-      }
       await linkSubmission(lead.id);
-      if (policy === "attach") onCommit(() => emitJob("lead/returning", { orgId: ctx.orgId, leadId: lead.id }));
       return { outcome: policy === "attach" ? "attached" : "merged_blanks", lead, matches };
     }
   }

@@ -24,7 +24,7 @@ const FIELD_LABELS: Record<string, string> = {
   qualificationOverride: "Qualification override", qualificationOverrideReason: "Override reason", ownerId: "Owner", nextFollowUpAt: "Next follow-up",
   lastContactedAt: "Last contacted", firstReplyAt: "First reply", quoteValue: "Quote", contractValue: "Contract value", collectedAmount: "Collected",
   contactedAt: "Contacted at", consultScheduledAt: "Consult scheduled at", consultHeldAt: "Consult held at", proposalSentAt: "Proposal sent at",
-  wonAt: "Won at", lostAt: "Lost at", furthestStage: "Furthest stage", duplicateOfId: "Merged into", returningInquiry: "Returning inquiry",
+  wonAt: "Won at", lostAt: "Lost at", furthestStage: "Furthest stage", duplicateOfId: "Merged into", returningInquiry: "Repeat submission",
   archivedAt: "Archived", utmSource: "utm_source", utmMedium: "utm_medium", utmCampaign: "utm_campaign", utmContent: "utm_content", utmTerm: "utm_term",
 };
 const MONEY = new Set(["budgetMin", "budgetMax", "estimateTotal", "quoteValue", "contractValue", "collectedAmount"]);
@@ -62,7 +62,7 @@ function title(e: TimelineEvent, users: Record<string, string>) {
     case "follow_up_done": return `Follow-up done${p.reason ? ` (${p.reason})` : p.viaActivity ? ` (by logging a ${p.viaActivity})` : ""}`;
     case "follow_up_set": return `Follow-up set for ${fmtDateTime(e.newValue)}${p.note ? ` · ${p.note}` : ""}`;
     case "converted": return `Converted · ${fmtMoney(p.contractValue)} in ${p.daysToConvert} days`;
-    case "returning_inquiry": return `Returning inquiry${p.form ? ` via ${p.form === "quote_builder" ? "Quote Builder" : "Contact Us"}` : ""}`;
+    case "returning_inquiry": return `Submitted again${p.form ? ` via ${p.form === "quote_builder" ? "Quote Builder" : "Contact Us"}` : ""}`;
     case "merged": return e.field === "duplicateOfId" ? "Merged into another record" : `Merged ${p.mergedRecordId ?? "a record"} into this lead`;
     case "assigned": return e.newValue ? `Assigned to ${users[e.newValue] ?? "someone"}${p.ruleName ? ` (rule: ${p.ruleName})` : p.how === "manual" ? " manually" : ""}` : "Unassigned";
     default: return FIELD_LABELS[e.field ?? ""] ?? human(e.type);

@@ -65,7 +65,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
       <header className="card p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs tracking-wide text-muted tabular">{lead.recordId}{lead.returningInquiry && <span className="chip ml-2 border-bloom/30 text-bloom">returning inquiry</span>}</p>
+            <p className="text-xs tracking-wide text-muted tabular">{lead.recordId}</p>
             <h1 className="mt-0.5 truncate text-3xl">
               {fullName(lead)}
               {lead.partnerName && <span className="text-muted"> &amp; {lead.partnerName}</span>}

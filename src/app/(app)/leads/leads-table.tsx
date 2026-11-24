@@ -139,7 +139,6 @@ export function LeadsTable(props: {
                       {[r.firstName, r.lastName].filter(Boolean).join(" ") || "(no name)"}
                     </Link>
                     {r.partnerName && <span className="text-muted"> &amp; {r.partnerName}</span>}
-                    {r.returningInquiry && <span className="chip ml-2 border-bloom/30 text-bloom">returning</span>}
                   </td>
                   <td className="td whitespace-nowrap">
                     {fmtDate(r.eventDate)}

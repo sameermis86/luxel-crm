@@ -1,6 +1,6 @@
 import { inngest } from "./client";
 
-export type JobEvent = "lead/created" | "lead/returning" | "import/completed";
+export type JobEvent = "lead/created" | "import/completed";
 
 /**
  * Fire a background-job event. A no-op unless Inngest is configured
