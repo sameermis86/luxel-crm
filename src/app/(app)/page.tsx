@@ -5,7 +5,7 @@ import { listUsers } from "@/server/leads/queries";
 import { dashToParams, parseDashFilter, RANGE_LABELS, type DashFilter } from "@/lib/metrics";
 import { fmtDate, titleCase } from "@/lib/format";
 import { SOURCES, EVENT_TYPES } from "@/db/schema";
-import { SourceChart, TrendChart } from "@/components/dashboard-charts";
+import { TrendChart } from "@/components/dashboard-charts";
 import { C } from "@/lib/chart-colors";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +28,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   const one = (v?: string[]) => (v?.length === 1 ? v[0] : "");
   const rangeLabel = df.range && df.range !== "custom" ? RANGE_LABELS[df.range as keyof typeof RANGE_LABELS] : `${fmtDate(df.from)} – ${fmtDate(df.to)}`;
   const filtersOn = [df.owner, df.source, df.event_type].filter((v) => v?.length).length;
-  const card = (k: string) => d.cards.find((c) => c.key === k)!;
-  const leadsN = card("leads").value;
-  const pct = (n: number) => (leadsN ? `${Math.round((n / leadsN) * 100)}% of leads` : "");
+  const lead = (k: string) => d.leadNums.find((c) => c.key === k)!;
+  const leadsN = lead("leads").value;
+  const channels = d.leadNums.filter((c) => c.key.startsWith("ch_") && (c.key !== "ch_other" || c.value > 0));
+  const quotesTotal = d.quotes.find((c) => c.key === "quotes")!;
+  const stages = d.quotes.filter((c) => c.key.startsWith("q_"));
+  const share = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : "—");
   const todo = d.actions.filter((a) => a.count > 0 && a.tone !== "quiet");
   const todoCount = todo.reduce((s, a) => s + a.count, 0);
   const quiet = d.actions.filter((a) => a.count > 0 && a.tone === "quiet");
-  const outcome = (["open", "quote_out", "won", "lost"] as const).map((k) => ({ k, n: d.trend.reduce((s, t) => s + t[k], 0) }));
   const pipeMax = Math.max(1, ...d.pipeline.map((p) => p.value));
-  const funnelMax = Math.max(1, d.funnel[0]?.value ?? 1);
 
   return (
     <div className="space-y-5">
@@ -71,18 +72,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         </div>
       </header>
 
-      {/* KPI strip: all about the leads that came in during the range */}
-      <section className="card overflow-hidden" aria-labelledby="kpi-h">
-        <h2 id="kpi-h" className="border-b border-edge px-4 py-2 text-xs font-medium tracking-wide text-muted uppercase" style={{ fontFamily: "var(--font-sans)" }}>
-          Leads that came in · {rangeLabel}
-        </h2>
-        <div className="grid grid-cols-2 divide-edge sm:grid-cols-3 lg:grid-cols-5 lg:divide-x [&>*]:border-edge max-lg:[&>*]:border-b">
-          <Kpi c={card("leads")} sub="View all" />
-          <Kpi c={card("needs_follow_up")} sub={pct(card("needs_follow_up").value) || "Open leads waiting on you"} alert />
-          <Kpi c={card("quoted")} sub={pct(card("quoted").value)} />
-          <Kpi c={card("won")} sub={pct(card("won").value)} />
-          <Kpi c={card("win_rate")} sub={card("win_rate").numerator ? `${card("win_rate").numerator!.value} won of ${card("win_rate").denominator!.value} decided` : ""} />
+      {/* Leads: total = sum of the channels */}
+      <section className="card overflow-hidden" aria-labelledby="leads-h">
+        <SectionHead id="leads-h" title="Leads" note={`came in · ${rangeLabel.toLowerCase()}`} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:divide-x lg:divide-edge max-lg:[&>*]:border-b max-lg:[&>*]:border-edge">
+          <Kpi c={lead("leads")} sub={channels.map((c) => c.value).join(" + ") + " by channel"} strong />
+          {channels.map((c) => <Kpi key={c.key} c={c} sub={`${share(c.value, leadsN)} of leads`} swatch={C[c.key as keyof typeof C]} />)}
+          <Kpi c={lead("needs_follow_up")} sub={`${share(lead("needs_follow_up").value, leadsN)} of leads`} alert />
         </div>
+      </section>
+
+      {/* Quotes: total = sent + action needed + signed + lost; each as a share of total */}
+      <section className="card overflow-hidden" aria-labelledby="quotes-h">
+        <SectionHead id="quotes-h" title="Quotes" note={`Goodshuffle stage of those leads · ${share(quotesTotal.value, leadsN)} of leads got a quote`} />
+        <div className="grid grid-cols-2 sm:grid-cols-5 sm:divide-x sm:divide-edge max-sm:[&>*]:border-b max-sm:[&>*]:border-edge">
+          <Kpi c={quotesTotal} sub={stages.map((q) => q.numerator!.value).join(" + ")} strong />
+          {stages.map((q) => (
+            <Kpi key={q.key} c={q} sub={`${q.numerator!.value} of ${q.denominator!.value} quotes`} swatch={C[q.key as keyof typeof C]} />
+          ))}
+        </div>
+        {quotesTotal.value > 0 && (
+          <div className="flex h-2 border-t border-edge" aria-hidden>
+            {stages.map((q) => q.numerator!.value > 0 && <div key={q.key} style={{ width: `${(q.numerator!.value / quotesTotal.value) * 100}%`, background: C[q.key as keyof typeof C] }} className="border-r-2 border-card last:border-r-0" />)}
+          </div>
+        )}
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -126,22 +139,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
             </ul>
           </section>
 
-          {/* Outcome of the range's leads */}
-          <section className="card p-4" aria-labelledby="out-h">
-            <h2 id="out-h" className="text-lg">Where they stand</h2>
-            <p className="text-xs text-muted">The {leadsN} leads from {rangeLabel.toLowerCase()}</p>
-            <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-paper" aria-hidden>
-              {outcome.map((o) => o.n > 0 && <div key={o.k} style={{ width: `${(o.n / Math.max(1, leadsN)) * 100}%`, background: C[o.k] }} className="border-r-2 border-card last:border-r-0" />)}
-            </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              {outcome.map((o) => (
-                <div key={o.k} className="flex items-center justify-between gap-2">
-                  <dt className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: C[o.k] }} aria-hidden />{OUTCOME_LABEL[o.k]}</dt>
-                  <dd className="tabular">{o.n}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
         </div>
       </div>
 
@@ -149,71 +146,41 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
       <section className="card p-4" aria-labelledby="trend-h">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="trend-h" className="text-lg">Leads per {d.bucket}</h2>
-          <span className="text-xs text-muted">when they came in, colored by where they stand now</span>
+          <span className="text-xs text-muted">by channel</span>
         </div>
         <TrendChart data={d.trend} />
         <TableView
-          head={[d.bucket === "month" ? "Month" : "Week of", "Open", "Quote out", "Won", "Lost / unqualified", "Total"]}
+          head={[d.bucket === "month" ? "Month" : "Week of", "Quote Builder", "Contact form", "Goodshuffle", "Other", "Total"]}
           rows={d.trend.map((t) => [
             t.label,
-            ...(["open", "quote_out", "won", "lost"] as const).map((k) => <Link key={k} className="underline" href={t.hrefs[k]}>{t[k]}</Link>),
+            ...(["quote_builder", "contact_us_form", "goodshuffle", "other"] as const).map((k) => <Link key={k} className="underline" href={t.hrefs[k]}>{t[k]}</Link>),
             <Link key="t" className="underline" href={t.href}>{t.total}</Link>,
           ])}
         />
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <section className="card p-4" aria-labelledby="src-h">
-          <div className="flex items-baseline justify-between">
-            <h2 id="src-h" className="text-lg">Sources</h2>
-            <span className="text-xs text-muted">leads and wins, {rangeLabel.toLowerCase()}</span>
-          </div>
-          <SourceChart data={d.bySource.map((s) => ({ ...s, label: titleCase(s.source) }))} />
-          <TableView
-            head={["Source", "Leads", "Won"]}
-            rows={d.bySource.map((s) => [titleCase(s.source), <Link key="l" className="underline" href={s.href}>{s.leads}</Link>, <Link key="w" className="underline" href={s.wonHref}>{s.won}</Link>])}
-          />
-        </section>
-
-        <section className="card p-4" aria-labelledby="fun-h">
-          <div className="flex items-baseline justify-between">
-            <h2 id="fun-h" className="text-lg">Funnel</h2>
-            <span className="text-xs text-muted">furthest stage reached</span>
-          </div>
-          <ol className="mt-3 space-y-2.5">
-            {d.funnel.map((f, i) => {
-              const prev = i ? d.funnel[i - 1].value : null;
-              return (
-                <li key={f.key}>
-                  <Link href={f.href} className="group block" aria-label={`${f.label}: ${f.value} leads`}>
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="group-hover:underline">{f.label}</span>
-                      <span className="tabular">
-                        {prev ? <span className="mr-2 text-xs text-muted">{((f.value / prev) * 100).toFixed(0)}%</span> : null}
-                        {f.value}
-                      </span>
-                    </div>
-                    <div className="mt-1 h-2 rounded-full bg-paper">
-                      <div className="h-2 rounded-full" style={{ width: `${f.value ? Math.max(1.5, (f.value / funnelMax) * 100) : 0}%`, background: f.key === "won" ? C.won : C.leads }} />
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      </div>
     </div>
   );
 }
 
-const OUTCOME_LABEL = { open: "Open", quote_out: "Quote out", won: "Won", lost: "Lost / unqualified" } as const;
 const TONE = { urgent: "bg-bloom", normal: "bg-amber", quiet: "bg-muted" } as const;
 
-function Kpi({ c, sub, alert }: { c: Dashboard["cards"][number]; sub: string; alert?: boolean }) {
+function SectionHead({ id, title, note }: { id: string; title: string; note: string }) {
   return (
-    <Link href={c.href} title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value} className="group block px-4 py-3.5 transition-colors duration-150 hover:bg-paper/60">
-      <div className="text-xs text-muted">{c.label}</div>
+    <div className="flex flex-wrap items-baseline gap-x-2 border-b border-edge px-4 py-2.5">
+      <h2 id={id} className="text-lg">{title}</h2>
+      <span className="text-xs text-muted">{note}</span>
+    </div>
+  );
+}
+
+function Kpi({ c, sub, alert, strong, swatch }: { c: Dashboard["leadNums"][number]; sub: string; alert?: boolean; strong?: boolean; swatch?: string }) {
+  return (
+    <Link href={c.href} title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value} className={`group block px-4 py-3.5 transition-colors duration-150 hover:bg-paper/60 ${strong ? "bg-paper/40" : ""}`}>
+      <div className="flex items-center gap-1.5 text-xs text-muted">
+        {swatch && <span className="inline-block h-2 w-2 rounded-sm" style={{ background: swatch }} aria-hidden />}
+        {c.label}
+      </div>
       <div className={`mt-0.5 font-display text-[28px] leading-tight tabular ${alert && c.value > 0 ? "text-bloom" : ""}`}>{c.display}</div>
       <div className="mt-0.5 truncate text-xs text-muted group-hover:text-ink">{sub}</div>
     </Link>

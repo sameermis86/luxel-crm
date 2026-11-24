@@ -34,3 +34,14 @@ of any other candidate. Anything unsure is listed under "not matched" instead of
 
 The secret iCal address gives read access to that calendar; keep it only in Vercel. If it
 leaks, use "Reset" next to it in Google Calendar and update Vercel.
+
+## Stage tags and new leads (added later)
+- Every matched lead gets `goodshuffle_status` (its Goodshuffle stage) and `goodshuffle_project` (project number).
+  These are always written, in preview mode too: they describe Goodshuffle and don't change the CRM status.
+  The dashboard's Quotes numbers come from this tag.
+- A project with no lead in the CRM (no lead on that event date, or none with a matching name) becomes a lead:
+  source/channel Goodshuffle, client name, phone/email from the event, venue, event date, CRM status from the stage.
+  Later runs find it again by project number. Ambiguous projects ("more than one lead could match") stay in the review list.
+- Lead creation is off until switched on (`goodshuffle_settings.createLeads`); `POST /api/cron/wix-sync?goodshuffle=create-leads`
+  switches it on and runs once. The lead's created date is the calendar entry's CREATED stamp when the feed has one.
+

@@ -46,6 +46,8 @@ export interface IcsEvent {
   location: string;
   /** calendar date (YYYY-MM-DD) the event starts, in the studio's zone */
   startDate: string | null;
+  /** when the calendar entry was created (CREATED), if the feed says */
+  created?: Date | null;
 }
 
 const unescape = (v: string) => v.replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
@@ -64,6 +66,7 @@ export function parseIcs(text: string, tz = "America/Toronto"): IcsEvent[] {
         description: unescape(cur.DESCRIPTION ?? "").trim(),
         location: unescape(cur.LOCATION ?? "").trim(),
         startDate: icsDate(cur.DTSTART ?? "", cur.DTSTART_PARAMS ?? "", tz),
+        created: icsStamp(cur.CREATED ?? ""),
       });
       cur = null;
     } else if (cur) {
@@ -75,6 +78,12 @@ export function parseIcs(text: string, tz = "America/Toronto"): IcsEvent[] {
     }
   }
   return out.filter((e) => e.uid);
+}
+
+/** A UTC stamp like 20260115T143000Z → Date (null if absent or not UTC). */
+export function icsStamp(value: string): Date | null {
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])) : null;
 }
 
 /** DTSTART value → local calendar date. Handles all-day dates, UTC times and TZID times. */
@@ -93,6 +102,18 @@ export function extractContacts(text: string) {
   return { emails, phones };
 }
 
+/** Goodshuffle's project number, from the "Project: <name> (123456789)" line. */
+export function projectNumber(ev: Pick<IcsEvent, "description">): string | null {
+  const m = ev.description.match(/^Project:.*\((\d{4,})\)\s*$/im);
+  return m ? m[1] : null;
+}
+
+/** The "Venue: …" line. */
+export function venueName(ev: Pick<IcsEvent, "description">): string | null {
+  const m = ev.description.match(/^Venue:\s*(.+)$/im);
+  return m ? m[1].trim() || null : null;
+}
+
 /** The "Client: …" line Goodshuffle writes into each calendar event. */
 export function clientName(ev: Pick<IcsEvent, "description">): string | null {
   const m = ev.description.match(/^Client:\s*(.+)$/im);
@@ -107,11 +128,12 @@ export interface CandidateLead {
   emailNormalized: string | null;
   phoneE164: string | null;
   eventDate: string | null;
+  goodshuffleProject?: string | null;
 }
 
 export interface GsMatch {
   leadId: string | null;
-  how: "contact" | "date_and_name" | null;
+  how: "project" | "contact" | "date_and_name" | null;
   confidence: number;
   reason: string;
 }
@@ -126,6 +148,12 @@ const leadNames = (l: CandidateLead) => [`${l.firstName ?? ""} ${l.lastName ?? "
  *    the best one wins only if it's clearly ahead of the runner-up. Anything else goes to review.
  */
 export function matchEvent(ev: IcsEvent, leads: CandidateLead[]): GsMatch {
+  // 0. a lead already tied to this Goodshuffle project (matched or created by an earlier sync)
+  const project = projectNumber(ev);
+  if (project) {
+    const tied = leads.find((l) => l.goodshuffleProject === project);
+    if (tied) return { leadId: tied.id, how: "project", confidence: 1, reason: "Same Goodshuffle project" };
+  }
   const text = `${ev.summary}\n${ev.description}`;
   const { emails, phones } = extractContacts(text);
   if (emails.length || phones.length) {

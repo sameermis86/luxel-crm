@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SQL } from "drizzle-orm";
-import { EVENT_TYPES, SOURCES, type Status } from "@/db/schema";
+import { EVENT_TYPES, SOURCES, type Source, type Status } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type SortKey, type WhereContext, FUNNEL_REACHED } from "./lead-filters";
 import { addDaysToDate, dateInTz, firstOfMonthInTz, lastOfMonth } from "./dates";
 
@@ -122,25 +122,50 @@ export type Metric = CountMetric | RatioMetric;
 /**
  * Every "in range" number is about the same group of leads: those that came in during
  * the range, counted by where they stand now. Dates of later status changes are not
- * used, because synced statuses (Goodshuffle) are stamped with the day they synced,
- * not the day the client signed. A cohort count can never exceed 100% of its leads.
+ * used, because synced statuses (Goodshuffle) are stamped with the day they synced.
  */
-export function metricCards(df: DashFilter): Metric[] {
+
+/** The three ways leads reach us. Total leads = their sum (plus "Other" if anything else exists). */
+export const CHANNELS = [
+  { key: "quote_builder", label: "Quote Builder" },
+  { key: "contact_us_form", label: "Contact form" },
+  { key: "goodshuffle", label: "Goodshuffle" },
+] as const satisfies readonly { key: Source; label: string }[];
+export const OTHER_CHANNELS = SOURCES.filter((s) => !CHANNELS.some((c) => c.key === s));
+
+/** Goodshuffle quote stages. Total quotes = their sum; each is reported as a share of it. */
+export const QUOTE_STAGES = [
+  { key: "quote_sent", label: "Quote sent" },
+  { key: "action_needed", label: "Action needed" },
+  { key: "signed", label: "Signed" },
+  { key: "lost", label: "Lost" },
+] as const;
+export type QuoteStage = (typeof QUOTE_STAGES)[number]["key"];
+
+export function leadCards(df: DashFilter): CountMetric[] {
   const b = base(df);
   return [
-    { key: "leads", label: "Leads", definition: "Leads that came in during the range (merged duplicates and undone imports excluded).", kind: "count", filter: b },
+    { key: "leads", label: "Total leads", definition: "Leads that came in during the range: Quote Builder + Contact form + Goodshuffle.", kind: "count", filter: b },
+    ...CHANNELS.map((c): CountMetric => ({ key: `ch_${c.key}`, label: c.label, definition: `Leads that came in through ${c.label} during the range.`, kind: "count", filter: { ...b, channel: [c.key] } })),
+    { key: "ch_other", label: "Other", definition: "Leads entered by hand or imported from a file.", kind: "count", filter: { ...b, channel: [...OTHER_CHANNELS] } },
     { key: "needs_follow_up", label: "Needs follow-up", definition: "Of those leads, the open ones whose follow-up is due, new ones not contacted within 24h, or open ones with no follow-up set.", kind: "count", filter: { ...b, awaiting: true } },
-    { key: "quoted", label: "Got a quote", definition: "Of those leads, how many have reached Proposal sent or Won.", kind: "count", filter: { ...b, reached: "proposal" } },
-    { key: "won", label: "Won", definition: "Of those leads, how many are Won now.", kind: "count", filter: { ...b, status: ["won"] } },
-    {
-      key: "win_rate",
-      label: "Win rate",
-      definition: "Of those leads that have a decision, the share that was won: won ÷ (won + lost).",
+  ];
+}
+
+export function quoteCards(df: DashFilter): Metric[] {
+  const b = base(df);
+  const all: LeadFilter = { ...b, gs: QUOTE_STAGES.map((q) => q.key) };
+  return [
+    { key: "quotes", label: "Total quotes", definition: "Leads from the range with a Goodshuffle quote: signed + action needed + quote sent + lost.", kind: "count", filter: all },
+    ...QUOTE_STAGES.map((q): RatioMetric => ({
+      key: `q_${q.key}`,
+      label: q.label,
+      definition: `Quotes at Goodshuffle stage “${q.label}”, as a share of all quotes.`,
       kind: "ratio",
-      numerator: { ...b, status: ["won"] },
-      denominator: { ...b, status: ["won", "lost"] },
-      nouns: ["won", "decided"],
-    },
+      numerator: { ...b, gs: [q.key] },
+      denominator: all,
+      nouns: [q.label.toLowerCase(), "quotes"],
+    })),
   ];
 }
 
@@ -178,7 +203,7 @@ export function nextActions(df: DashFilter, now: Date, tz: string, cfg: { freshI
   ];
 }
 
-/** Where each lead stands now, in four groups (the trend chart's stacks). */
+
 /** Live pipeline right now, by stage (not limited by the date range). */
 export const PIPELINE: { key: string; label: string; statuses: Status[] }[] = [
   { key: "new", label: "New", statuses: ["new"] },
@@ -187,22 +212,6 @@ export const PIPELINE: { key: string; label: string; statuses: Status[] }[] = [
   { key: "quote_out", label: "Quote out", statuses: ["proposal_sent"] },
   { key: "on_hold", label: "On hold", statuses: ["on_hold"] },
 ];
-
-export const OUTCOMES = [
-  { key: "open", label: "Open", statuses: ["new", "contacted", "consult_scheduled", "consult_held", "on_hold"] },
-  { key: "quote_out", label: "Quote out", statuses: ["proposal_sent"] },
-  { key: "won", label: "Won", statuses: ["won"] },
-  { key: "lost", label: "Lost / unqualified", statuses: ["lost", "unqualified"] },
-] as const satisfies readonly { key: string; label: string; statuses: readonly Status[] }[];
-export type OutcomeKey = (typeof OUTCOMES)[number]["key"];
-
-export const FUNNEL = [
-  { key: "new", label: "Came in", filter: (df: DashFilter): LeadFilter => base(df) },
-  { key: "contacted", label: "Contacted", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "contacted" }) },
-  { key: "consult", label: "Consult", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "consult" }) },
-  { key: "proposal", label: "Proposal", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "proposal" }) },
-  { key: "won", label: "Won", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "won" }) },
-] as const;
 
 export const metricWhere = (f: LeadFilter, wc: WhereContext): SQL => leadWhere(f, wc);
 export const metricHref = (f: LeadFilter) => leadsHref(f);

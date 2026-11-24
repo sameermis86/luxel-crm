@@ -94,3 +94,25 @@ describe("plannedStatus (forward only)", () => {
     expect(plannedStatus("unqualified", "signed")).toBeNull();
   });
 });
+
+describe("Goodshuffle event details", () => {
+  const description = "Status: Lost\nProject: Rossi - Kortright Wedding (987654321)\nVenue: Kortright Centre\nClient: Sofia Rossi\nSales Lead: Mansi";
+  it("reads the project number, venue and client", async () => {
+    const { projectNumber, venueName, clientName } = await import("@/lib/goodshuffle");
+    expect(projectNumber({ description })).toBe("987654321");
+    expect(venueName({ description })).toBe("Kortright Centre");
+    expect(clientName({ description })).toBe("Sofia Rossi");
+    expect(projectNumber({ description: "Project: no number" })).toBeNull();
+  });
+  it("matches a lead already tied to the same project first", async () => {
+    const { matchEvent } = await import("@/lib/goodshuffle");
+    const ev = { uid: "u", summary: "Anything", description, location: "", startDate: "2027-01-01" };
+    const leads = [{ id: "L1", firstName: "Other", lastName: "Name", partnerName: null, emailNormalized: null, phoneE164: null, eventDate: null, goodshuffleProject: "987654321" }];
+    expect(matchEvent(ev, leads)).toMatchObject({ leadId: "L1", how: "project" });
+  });
+  it("reads the CREATED stamp", async () => {
+    const { parseIcs } = await import("@/lib/goodshuffle");
+    const [e] = parseIcs("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nCREATED:20260115T143000Z\r\nDTSTART;VALUE=DATE:20270101\r\nEND:VEVENT\r\nEND:VCALENDAR");
+    expect(e.created?.toISOString()).toBe("2026-01-15T14:30:00.000Z");
+  });
+});

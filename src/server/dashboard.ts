@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { leads, type Source, type Status } from "@/db/schema";
+import { leads, type Source } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type WhereContext } from "@/lib/lead-filters";
-import { base, dims, FUNNEL, metricCards, nextActions, OUTCOMES, PIPELINE, type DashFilter, type Metric, type OutcomeKey } from "@/lib/metrics";
+import { base, CHANNELS, dims, leadCards, nextActions, OTHER_CHANNELS, PIPELINE, quoteCards, type DashFilter, type Metric } from "@/lib/metrics";
 import { addDaysToDate, lastOfMonth } from "@/lib/dates";
 import { countLeads, listLeads } from "./leads/queries";
 
@@ -46,7 +46,10 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
   const b = base(df);
   const bWhere = leadWhere(b, wc);
 
-  const cards = await Promise.all(metricCards(df).map((m) => evalMetric(tx, m, wc)));
+  const [leadNums, quotes] = await Promise.all([
+    Promise.all(leadCards(df).map((m) => evalMetric(tx, m, wc))),
+    Promise.all(quoteCards(df).map((m) => evalMetric(tx, m, wc))),
+  ]);
 
   // Next best actions: count + the first few leads, oldest problem first
   const actions = await Promise.all(
@@ -71,42 +74,23 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     }),
   );
 
-  // Leads by source, and how many of them are won now
-  const srcRows = await tx
-    .select({ source: leads.source, n: sql<number>`count(*)::int`, won: sql<number>`count(*) filter (where ${leads.status} = 'won')::int` })
-    .from(leads)
-    .where(bWhere)
-    .groupBy(leads.source)
-    .orderBy(sql`count(*) desc`);
-  const bySource = srcRows.map((r) => {
-    const f: LeadFilter = { ...b, source: [r.source as Source] };
-    return { source: r.source, leads: r.n, won: r.won, href: leadsHref(f), wonHref: leadsHref({ ...f, status: ["won"] }) };
-  });
-
-  // Funnel: leads that came in during the range, by the furthest stage they reached
-  const funnel = await Promise.all(
-    FUNNEL.map(async (s) => {
-      const f = s.filter(df);
-      return { key: s.key, label: s.label, value: await countLeads(tx, f, wc), href: leadsHref(f) };
-    }),
-  );
-
-  // Leads per month (or week), stacked by where they stand now
+  // Leads per month (or week), stacked by channel
   // the zone is inlined (validated) so SELECT and GROUP BY are the identical expression
   if (!/^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(tz)) throw new Error(`bad timezone ${tz}`);
   const bucket = bucketFor(df);
   const bucketExpr = sql<string>`to_char(date_trunc('${sql.raw(bucket)}', ${leads.createdAt} at time zone '${sql.raw(tz)}'), 'YYYY-MM-DD')`;
   const rows = await tx
-    .select({ period: bucketExpr, status: leads.status, n: sql<number>`count(*)::int` })
+    .select({ period: bucketExpr, channel: leads.captureChannel, n: sql<number>`count(*)::int` })
     .from(leads)
     .where(bWhere)
-    .groupBy(bucketExpr, leads.status)
+    .groupBy(bucketExpr, leads.captureChannel)
     .orderBy(bucketExpr);
-  const groupOf = new Map<Status, OutcomeKey>(OUTCOMES.flatMap((o) => o.statuses.map((s) => [s as Status, o.key] as const)));
-  const periods = new Map<string, Record<OutcomeKey, number>>();
+  type Key = (typeof CHANNELS)[number]["key"] | "other";
+  const keyOf = (c: string | null): Key => (CHANNELS.some((x) => x.key === c) ? (c as Key) : "other");
+  const periods = new Map<string, Record<Key, number>>();
   for (const r of rows) {
-    const p = periods.get(r.period) ?? { open: 0, quote_out: 0, won: 0, lost: 0 };
-    p[groupOf.get(r.status as Status)!] += r.n;
+    const p = periods.get(r.period) ?? { quote_builder: 0, contact_us_form: 0, goodshuffle: 0, other: 0 };
+    p[keyOf(r.channel)] += r.n;
     periods.set(r.period, p);
   }
   const trend = [...periods.entries()].map(([start, counts]) => {
@@ -122,13 +106,16 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
         ? d.toLocaleDateString("en-CA", { month: "short", year: "2-digit", timeZone: "UTC" })
         : d.toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" }),
       ...counts,
-      total: counts.open + counts.quote_out + counts.won + counts.lost,
+      total: counts.quote_builder + counts.contact_us_form + counts.goodshuffle + counts.other,
       href: leadsHref(pf),
-      hrefs: Object.fromEntries(OUTCOMES.map((o) => [o.key, leadsHref({ ...pf, status: [...o.statuses] })])) as Record<OutcomeKey, string>,
+      hrefs: {
+        ...Object.fromEntries(CHANNELS.map((c) => [c.key, leadsHref({ ...pf, channel: [c.key as Source] })])),
+        other: leadsHref({ ...pf, channel: [...OTHER_CHANNELS] }),
+      } as Record<Key, string>,
     };
   });
 
-  return { cards, actions, pipeline, bySource, funnel, trend, bucket };
+  return { leadNums, quotes, actions, pipeline, trend, bucket };
 }
 
 export type Dashboard = Awaited<ReturnType<typeof computeDashboard>>;

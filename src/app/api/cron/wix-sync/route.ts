@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { resolveOrgId } from "@/server/org";
 import { runWixSync, wixRestClient } from "@/server/intake/wix-sync";
-import { configuredCalendars, inspectCalendars, runGoodshuffleSync } from "@/server/integrations/goodshuffle";
+import { configuredCalendars, inspectCalendars, runGoodshuffleSync, setGsCreateLeads } from "@/server/integrations/goodshuffle";
 import { runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 
 export const dynamic = "force-dynamic";
@@ -48,10 +48,13 @@ async function handle(req: NextRequest) {
   if (Object.keys(configuredCalendars()).length) {
     try {
       // ?goodshuffle=apply-exact: one-off apply of phone/email matches only
-      const g = req.nextUrl.searchParams.get("goodshuffle") === "apply-exact"
+      const gsParam = req.nextUrl.searchParams.get("goodshuffle");
+      // ?goodshuffle=create-leads: switch on lead creation for unmatched projects, then run
+      if (gsParam === "create-leads") await setGsCreateLeads(orgId, true);
+      const g = gsParam === "apply-exact"
         ? await runGoodshuffleSync(orgId, { mode: "apply", onlyExact: true })
         : await runGoodshuffleSync(orgId);
-      out.goodshuffle = { mode: g.mode, events: g.events, changes: g.changes?.length ?? 0, applied: g.changes?.filter((c) => c.applied).length ?? 0, unmatched: g.unmatched?.length ?? 0 };
+      out.goodshuffle = { mode: g.mode, events: g.events, changes: g.changes?.length ?? 0, applied: g.changes?.filter((c) => c.applied).length ?? 0, unmatched: g.unmatched?.length ?? 0, created: g.created ?? 0, tagged: g.tagged ?? 0 };
     } catch (e) {
       console.error("[cron] goodshuffle sync failed", e);
       out.goodshuffle = { error: (e as Error).message };

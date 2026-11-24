@@ -63,38 +63,39 @@ export function SourceChart({ data }: { data: { label: string; leads: number; wo
   );
 }
 
-type Outcome = "open" | "quote_out" | "won" | "lost";
-const OUTCOME_SERIES: { key: Outcome; label: string }[] = [
-  { key: "open", label: "Open" },
-  { key: "quote_out", label: "Quote out" },
-  { key: "won", label: "Won" },
-  { key: "lost", label: "Lost / unqualified" },
+type Channel = "quote_builder" | "contact_us_form" | "goodshuffle" | "other";
+const CHANNEL_SERIES: { key: Channel; label: string }[] = [
+  { key: "quote_builder", label: "Quote Builder" },
+  { key: "contact_us_form", label: "Contact form" },
+  { key: "goodshuffle", label: "Goodshuffle" },
+  { key: "other", label: "Other" },
 ];
 
-/** Leads per period, stacked by where they stand now. */
-export function TrendChart({ data }: { data: ({ label: string; hrefs: Record<Outcome, string> } & Record<Outcome, number>)[] }) {
+/** Leads per period, stacked by channel (series with no leads are left out). */
+export function TrendChart({ data }: { data: ({ label: string; hrefs: Record<Channel, string> } & Record<Channel, number>)[] }) {
   const router = useRouter();
   if (!data.length) return <Empty />;
+  const series = CHANNEL_SERIES.filter((c) => data.some((d) => d[c.key] > 0));
   return (
     <>
-    <ChartLegend items={OUTCOME_SERIES.map((o) => ({ label: o.label, color: C[o.key] }))} />
+    <ChartLegend items={series.map((o) => ({ label: o.label, color: C[`ch_${o.key}`] }))} />
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={data} margin={{ left: -16, right: 8, top: 8, bottom: 0 }} barCategoryGap="18%">
         <CartesianGrid vertical={false} stroke={C.grid} />
         <XAxis dataKey="label" {...axisProps} />
         <YAxis allowDecimals={false} {...axisProps} />
         <Tooltip content={<TooltipBox />} cursor={{ fill: "rgba(27,36,32,0.04)" }} />
-        {OUTCOME_SERIES.map((o, i) => (
+        {series.map((o, i) => (
           <Bar
             key={o.key}
             isAnimationActive={false}
             dataKey={o.key}
             name={o.label}
             stackId="s"
-            fill={C[o.key]}
+            fill={C[`ch_${o.key}`]}
             stroke="#FFFFFF"
             strokeWidth={2}
-            radius={i === OUTCOME_SERIES.length - 1 ? [4, 4, 0, 0] : 0}
+            radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
             cursor="pointer"
             onClick={(d: any) => router.push((d.payload ?? d).hrefs[o.key])}
           />

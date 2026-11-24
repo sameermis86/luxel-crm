@@ -33,6 +33,7 @@ beforeAll(async () => {
           eventDate: i % 6 === 0 ? null : `2027-${String((i % 12) + 1).padStart(2, "0")}-15`,
           budgetMax: i % 5 === 0 ? 1500 : i % 3 === 0 ? null : 4000 + i * 150,
           source: sources[i % 5],
+          captureChannel: (["quote_builder", "contact_us_form", "goodshuffle", "other"] as const)[i % 4],
           ownerId: i % 2 ? env.sameer.id : i % 3 ? env.mansi.id : null,
           venueCity: i % 13 === 0 ? "Ottawa" : "Toronto",
         },
@@ -44,6 +45,8 @@ beforeAll(async () => {
       if (i % 8 === 0) await updateLead(tx, env.sys, lead.id, { status: "proposal_sent", quoteValue: 7000 }, { now: at(8) });
       if (i % 16 === 0) await updateLead(tx, env.sys, lead.id, { status: "won" }, { now: at(12) });
       if (i % 8 === 4) await updateLead(tx, env.sys, lead.id, { status: "lost", lostReason: "price" }, { now: at(10) });
+      // Goodshuffle stage on every 3rd lead: 5 each of sent / action needed / signed / lost
+      if (i % 3 === 0) await updateLead(tx, env.sys, lead.id, { goodshuffleStatus: (["quote_sent", "action_needed", "signed", "lost"] as const)[(i / 3) % 4] }, { now: at(3) });
       if (i % 5 === 1) await setFollowUp(tx, env.sys, lead.id, { dueAt: new Date(NOW.getTime() + (i % 2 ? -1 : 1) * 86400_000) }, at(2));
     }
   });
@@ -80,17 +83,12 @@ describe("acceptance: every dashboard number lists exactly that many records", (
         const d = await withCtx(who, (tx) => computeDashboard(tx, df, wc));
 
         const checks: [string, number, string][] = [];
-        for (const c of d.cards) {
+        for (const c of [...d.leadNums, ...d.quotes]) {
           if (c.numerator) {
             checks.push([`${c.key} numerator`, c.numerator.value, c.numerator.href]);
             checks.push([`${c.key} denominator`, c.denominator!.value, c.denominator!.href]);
           } else checks.push([c.key, c.value, c.href]);
         }
-        for (const s of d.bySource) {
-          checks.push([`source ${s.source}`, s.leads, s.href]);
-          checks.push([`source ${s.source} won`, s.won, s.wonHref]);
-        }
-        for (const f of d.funnel) checks.push([`funnel ${f.key}`, f.value, f.href]);
         for (const a of d.actions) {
           checks.push([`action ${a.key}`, a.count, a.href]);
           expect(a.leads.length).toBe(Math.min(4, a.count));
@@ -98,11 +96,16 @@ describe("acceptance: every dashboard number lists exactly that many records", (
         for (const p of d.pipeline) checks.push([`pipeline ${p.key}`, p.value, p.href]);
         for (const t of d.trend) {
           checks.push([`${d.bucket} ${t.period}`, t.total, t.href]);
-          for (const k of ["open", "quote_out", "won", "lost"] as const) checks.push([`${d.bucket} ${t.period} ${k}`, t[k], t.hrefs[k]]);
+          for (const k of ["quote_builder", "contact_us_form", "goodshuffle", "other"] as const) checks.push([`${d.bucket} ${t.period} ${k}`, t[k], t.hrefs[k]]);
         }
-        // every "in range" number is a subset of the leads that came in
-        const leadsN = d.cards.find((c) => c.key === "leads")!.value;
-        for (const c of d.cards) expect(c.numerator ? c.denominator!.value : c.value).toBeLessThanOrEqual(leadsN);
+        // total leads = the channels added up; total quotes = the stages added up
+        const num = (k: string) => [...d.leadNums, ...d.quotes].find((c) => c.key === k)!;
+        const leadsN = num("leads").value;
+        expect(d.leadNums.filter((c) => c.key.startsWith("ch_")).reduce((s, c) => s + c.value, 0)).toBe(leadsN);
+        const quotesN = num("quotes").value;
+        expect(d.quotes.filter((c) => c.key.startsWith("q_")).reduce((s, c) => s + c.numerator!.value, 0)).toBe(quotesN);
+        for (const q of d.quotes.filter((c) => c.key.startsWith("q_"))) expect(q.denominator!.value).toBe(quotesN);
+        expect(quotesN).toBeLessThanOrEqual(leadsN);
         expect(d.trend.reduce((s, t) => s + t.total, 0)).toBe(leadsN);
 
         expect(checks.length).toBeGreaterThan(10);
@@ -119,19 +122,28 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     const wc: WhereContext = { now: NOW, userId: null, settings };
     const d = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ from: "2026-08-31", to: "2026-11-30" }, NOW, TZ), wc));
     // (lead 0 is 00:00 UTC Sep 1 = 8pm Aug 31 in Toronto, so the range starts Aug 31)
-    const card = (k: string) => d.cards.find((c) => c.key === k)!;
+    const card = (k: string) => [...d.leadNums, ...d.quotes].find((c) => c.key === k)!;
     expect(card("leads").value).toBe(60);
     expect(d.bucket).toBe("week"); // 91 days
-    expect(card("quoted").value).toBe(8); // proposals for i % 8 === 0, incl. the 4 later won
-    expect(card("won").value).toBe(4); // i = 0, 16, 32, 48
-    expect(card("win_rate").numerator!.value).toBe(4);
-    expect(card("win_rate").denominator!.value).toBe(11); // 4 won + 7 lost (i % 8 === 4)
+    expect([card("ch_quote_builder").value, card("ch_contact_us_form").value, card("ch_goodshuffle").value, card("ch_other").value]).toEqual([15, 15, 15, 15]);
+    expect(card("quotes").value).toBe(20);
+    for (const k of ["q_quote_sent", "q_action_needed", "q_signed", "q_lost"]) {
+      expect(card(k).numerator!.value).toBe(5);
+      expect(card(k).display).toBe("25%");
+    }
     expect(d.pipeline.find((p) => p.key === "quote_out")!.value).toBe(4);
     expect(card("needs_follow_up").value).toBeGreaterThan(0);
-    expect(d.funnel.map((f) => f.value)).toEqual([...d.funnel.map((f) => f.value)].sort((a, b) => b - a)); // monotone
-    expect(d.bySource.reduce((s, x) => s + x.leads, 0)).toBe(60);
-    const sum = (k: "open" | "quote_out" | "won" | "lost") => d.trend.reduce((s, t) => s + t[k], 0);
-    expect([sum("quote_out"), sum("won"), sum("lost")]).toEqual([4, 4, 7]);
+  });
+
+  it("a lead with no channel recorded counts under Other, so channels still add up", async () => {
+    const settings = await withCtx(env.sys, (tx) => getSettings(tx, env.orgId));
+    const wc: WhereContext = { now: NOW, userId: null, settings };
+    await withCtx(env.sys, (tx) => createLead(tx, env.sys, { firstName: "No", lastName: "Channel", email: "nochannel@example.com" }, { createdAt: new Date("2026-11-20T15:00:00Z"), now: new Date("2026-11-20T15:00:00Z") }));
+    const d = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ range: "this_month" }, NOW, TZ), wc));
+    const total = d.leadNums.find((c) => c.key === "leads")!.value;
+    expect(d.leadNums.filter((c) => c.key.startsWith("ch_")).reduce((s, c) => s + c.value, 0)).toBe(total);
+    const other = d.leadNums.find((c) => c.key === "ch_other")!;
+    expect(await countAtHref(env.sys, wc, other.href)).toBe(other.value);
   });
 
   it("next best actions don't double-list a lead between replying and following up", async () => {
@@ -151,10 +163,10 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     const old = await withCtx(env.sys, (tx) =>
       createLead(tx, env.sys, { firstName: "July", lastName: "Lead", email: "july@example.com" }, { createdAt: new Date("2026-07-02T15:00:00Z"), now: new Date("2026-07-02T15:00:00Z") }),
     );
-    await withCtx(env.sys, (tx) => updateLead(tx, env.sys, old.id, { status: "won" }, { now: new Date(NOW.getTime() - 60_000) }));
+    await withCtx(env.sys, (tx) => updateLead(tx, env.sys, old.id, { status: "won", goodshuffleStatus: "signed" }, { now: new Date(NOW.getTime() - 60_000) }));
     const after = await month();
-    for (const k of ["leads", "quoted", "won", "win_rate"]) {
-      const v = (d: typeof before) => { const c = d.cards.find((x) => x.key === k)!; return c.numerator ? [c.numerator.value, c.denominator!.value] : c.value; };
+    for (const k of ["leads", "quotes", "q_signed"]) {
+      const v = (d: typeof before) => { const c = [...d.leadNums, ...d.quotes].find((x) => x.key === k)!; return c.numerator ? [c.numerator.value, c.denominator!.value] : c.value; };
       expect(v(after)).toEqual(v(before));
     }
   });

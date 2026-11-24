@@ -27,6 +27,10 @@ export const leadFilterSchema = z.object({
   q: z.string().trim().max(200).optional().catch(undefined),
   status: csv(z.enum(STATUSES)).catch(undefined),
   source: csv(z.enum(SOURCES)).catch(undefined),
+  /** how the lead reached us: quote_builder / contact_us_form / goodshuffle … */
+  channel: csv(z.enum(SOURCES)).catch(undefined),
+  /** Goodshuffle project stage */
+  gs: csv(z.enum(["new", "quote_sent", "action_needed", "signed", "lost"])).catch(undefined),
   event_type: csv(z.enum(EVENT_TYPES)).catch(undefined),
   owner: csv(z.union([z.string().uuid(), z.literal("unassigned"), z.literal("me")])).catch(undefined),
   created_from: isoDate.optional().catch(undefined),
@@ -167,6 +171,9 @@ export function leadWhere(f: LeadFilter, wc: WhereContext): SQL {
   }
   if (f.status?.length) c.push(inArray(leads.status, f.status));
   if (f.source?.length) c.push(inArray(leads.source, f.source));
+  // "other" also covers leads with no channel recorded (manual entry, old imports)
+  if (f.channel?.length) c.push(f.channel.includes("other") ? or(inArray(leads.captureChannel, f.channel), isNull(leads.captureChannel)) : inArray(leads.captureChannel, f.channel));
+  if (f.gs?.length) c.push(inArray(leads.goodshuffleStatus, f.gs));
   if (f.event_type?.length) c.push(inArray(leads.eventType, f.event_type));
   if (f.owner?.length) {
     const ids = f.owner.map((o) => (o === "me" ? wc.userId : o)).filter((o): o is string => !!o && o !== "unassigned");
@@ -229,6 +236,8 @@ export function describeFilter(f: LeadFilter): string[] {
   if (f.decided) out.push("won or lost");
   if (f.follow_up) out.push(`follow-up ${f.follow_up}`);
   if (f.consult) out.push("consultation booked");
+  if (f.channel) out.push(f.channel.map(h).join(", "));
+  if (f.gs) out.push(`Goodshuffle: ${f.gs.map(h).join(", ")}`);
   if (f.contacted) out.push(f.contacted === "no" ? "never contacted" : "contacted");
   if (f.returning) out.push("returning inquiries");
   if (f.has_dupes) out.push("possible duplicates");
