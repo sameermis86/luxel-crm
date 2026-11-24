@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SQL } from "drizzle-orm";
-import { EVENT_TYPES, SOURCES } from "@/db/schema";
+import { EVENT_TYPES, SOURCES, type Status } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type WhereContext, FUNNEL_REACHED } from "./lead-filters";
 import { addDaysToDate, dateInTz, firstOfMonthInTz, lastOfMonth } from "./dates";
 
@@ -61,12 +61,12 @@ export function rangeDates(range: keyof typeof RANGE_LABELS, now: Date, tz: stri
   }
 }
 
-/** Parse dashboard query params; default range = this month (Toronto). */
+/** Parse dashboard query params; default range = last 12 months (Toronto). */
 export function parseDashFilter(p: Record<string, string | string[] | undefined>, now: Date, tz: string): DashFilter {
   const raw = Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : v]));
   const f = dashFilterSchema.parse(raw);
   let { from, to } = f;
-  const range = f.range ?? (from || to ? "custom" : "this_month");
+  const range = f.range ?? (from || to ? "custom" : "last_12m");
   if (range !== "custom") ({ from, to } = rangeDates(range, now, tz));
   from ??= firstOfMonthInTz(now, tz);
   to ??= dateInTz(now, tz);
@@ -113,77 +113,54 @@ export interface RatioMetric {
   kind: "ratio";
   numerator: LeadFilter;
   denominator: LeadFilter;
+  /** how to read the fraction under the %: "{n} won of {d} decided" */
+  nouns: [string, string];
 }
 export type Metric = CountMetric | RatioMetric;
 
-export function metricCards(df: DashFilter, now: Date, tz: string): Metric[] {
-  const monthStart = firstOfMonthInTz(now, tz);
-  const today = dateInTz(now, tz);
+/**
+ * Every "in range" number is about the same group of leads: those that came in during
+ * the range, counted by where they stand now. Dates of later status changes are not
+ * used, because synced statuses (Goodshuffle) are stamped with the day they synced,
+ * not the day the client signed. A cohort count can never exceed 100% of its leads.
+ */
+export function metricCards(df: DashFilter): Metric[] {
+  const b = base(df);
   return [
+    { key: "leads", label: "Leads", definition: "Leads that came in during the range (merged duplicates and undone imports excluded).", kind: "count", filter: b },
+    { key: "quoted", label: "Got a quote", definition: "Of those leads, how many have reached Proposal sent or Won.", kind: "count", filter: { ...b, reached: "proposal" } },
+    { key: "won", label: "Won", definition: "Of those leads, how many are Won now.", kind: "count", filter: { ...b, status: ["won"] } },
     {
-      key: "total",
-      label: "Total leads",
-      definition: "Leads created in the selected range (merged duplicates and undone imports excluded).",
-      kind: "count",
-      filter: base(df),
-    },
-    {
-      key: "new_this_month",
-      label: "New leads this month",
-      definition: "Created since the 1st of this month (Toronto time), regardless of the date range.",
-      kind: "count",
-      filter: { ...dims(df), created_from: monthStart, created_to: today },
-    },
-    {
-      key: "qualified",
-      label: "Qualified leads",
-      definition: "Created in range with qualification = qualified.",
-      kind: "count",
-      filter: { ...base(df), qualification: ["qualified"] },
-    },
-    {
-      key: "unqualified",
-      label: "Unqualified leads",
-      definition: "Created in range with qualification = unqualified.",
-      kind: "count",
-      filter: { ...base(df), qualification: ["unqualified"] },
-    },
-    {
-      key: "awaiting",
-      label: "Awaiting follow-up",
-      definition: "As of now: open leads whose follow-up is due, new leads not contacted within 24h, or open leads with no follow-up set.",
-      kind: "count",
-      filter: { ...dims(df), awaiting: true },
-    },
-    {
-      key: "quotes_sent",
-      label: "Quotes sent",
-      definition: "Leads whose quote (proposal) was sent in the selected range, whenever the lead came in.",
-      kind: "count",
-      filter: { ...dims(df), quoted_from: df.from, quoted_to: df.to },
-    },
-    {
-      key: "conversion",
-      label: "Lead conversion",
-      definition: "Leads won in the range ÷ leads created in the range.",
+      key: "win_rate",
+      label: "Win rate",
+      definition: "Of those leads that have a decision, the share that was won: won ÷ (won + lost).",
       kind: "ratio",
-      numerator: { ...dims(df), status: ["won"], won_from: df.from, won_to: df.to },
-      denominator: base(df),
+      numerator: { ...b, status: ["won"] },
+      denominator: { ...b, status: ["won", "lost"] },
+      nouns: ["won", "decided"],
     },
   ];
 }
 
-/** Secondary conversion ratios shown under the headline. */
-export function conversionDetail(df: DashFilter): RatioMetric[] {
-  const won: LeadFilter = { ...dims(df), status: ["won"], won_from: df.from, won_to: df.to };
+/** Numbers about today, whatever the date range. */
+export function nowCards(df: DashFilter): Metric[] {
   return [
-    { key: "won_vs_qualified", label: "Won ÷ qualified", definition: "Won in range ÷ qualified leads created in range.", kind: "ratio", numerator: won, denominator: { ...base(df), qualification: ["qualified"] } },
-    { key: "won_vs_decided", label: "Won ÷ decided", definition: "Won in range ÷ (won + lost) in range.", kind: "ratio", numerator: won, denominator: { ...dims(df), closed_from: df.from, closed_to: df.to } },
+    { key: "awaiting", label: "Needs follow-up", definition: "Open leads whose follow-up is due, new leads not contacted within 24h, or open leads with no follow-up set.", kind: "count", filter: { ...dims(df), awaiting: true } },
+    { key: "awaiting_decision", label: "Quote out, no decision", definition: "Leads in Proposal sent right now.", kind: "count", filter: { ...dims(df), status: ["proposal_sent"] } },
   ];
 }
+
+/** Where each lead stands now, in four groups (the trend chart's stacks). */
+export const OUTCOMES = [
+  { key: "open", label: "Open", statuses: ["new", "contacted", "consult_scheduled", "consult_held", "on_hold"] },
+  { key: "quote_out", label: "Quote out", statuses: ["proposal_sent"] },
+  { key: "won", label: "Won", statuses: ["won"] },
+  { key: "lost", label: "Lost / unqualified", statuses: ["lost", "unqualified"] },
+] as const satisfies readonly { key: string; label: string; statuses: readonly Status[] }[];
+export type OutcomeKey = (typeof OUTCOMES)[number]["key"];
 
 export const FUNNEL = [
-  { key: "new", label: "New", filter: (df: DashFilter): LeadFilter => base(df) },
+  { key: "new", label: "Came in", filter: (df: DashFilter): LeadFilter => base(df) },
   { key: "contacted", label: "Contacted", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "contacted" }) },
   { key: "consult", label: "Consult", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "consult" }) },
   { key: "proposal", label: "Proposal", filter: (df: DashFilter): LeadFilter => ({ ...base(df), reached: "proposal" }) },

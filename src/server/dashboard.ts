@@ -1,9 +1,9 @@
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { leads, type Qualification, type Source } from "@/db/schema";
+import { leads, type Source, type Status } from "@/db/schema";
 import { leadWhere, leadsHref, type LeadFilter, type WhereContext } from "@/lib/lead-filters";
-import { base, conversionDetail, dims, FUNNEL, metricCards, type DashFilter, type Metric } from "@/lib/metrics";
-import { addDaysToDate } from "@/lib/dates";
+import { base, dims, FUNNEL, metricCards, nowCards, OUTCOMES, type DashFilter, type Metric, type OutcomeKey } from "@/lib/metrics";
+import { addDaysToDate, lastOfMonth } from "@/lib/dates";
 import { countLeads } from "./leads/queries";
 
 export interface CardValue {
@@ -15,6 +15,7 @@ export interface CardValue {
   href: string;
   numerator?: { value: number; href: string };
   denominator?: { value: number; href: string };
+  nouns?: [string, string];
 }
 
 async function evalMetric(tx: Tx, m: Metric, wc: WhereContext): Promise<CardValue> {
@@ -29,23 +30,28 @@ async function evalMetric(tx: Tx, m: Metric, wc: WhereContext): Promise<CardValu
     label: m.label,
     definition: m.definition,
     value: pct,
-    display: d ? `${pct.toFixed(1)}%` : "—",
+    display: d ? `${pct.toFixed(0)}%` : "—",
     href: leadsHref(m.numerator),
     numerator: { value: n, href: leadsHref(m.numerator) },
     denominator: { value: d, href: leadsHref(m.denominator) },
+    nouns: m.nouns,
   };
 }
 
+/** Ranges longer than ~3 months are bucketed by month, shorter ones by week. */
+export const bucketFor = (df: DashFilter): "month" | "week" => (addDaysToDate(df.from, 92) < df.to ? "month" : "week");
 
 export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext) {
   const tz = wc.settings.businessHours.timezone;
   const b = base(df);
   const bWhere = leadWhere(b, wc);
 
-  const cards = await Promise.all(metricCards(df, wc.now, tz).map((m) => evalMetric(tx, m, wc)));
-  const detail = await Promise.all(conversionDetail(df).map((m) => evalMetric(tx, m, wc)));
+  const [cards, now] = await Promise.all([
+    Promise.all(metricCards(df).map((m) => evalMetric(tx, m, wc))),
+    Promise.all(nowCards(df).map((m) => evalMetric(tx, m, wc))),
+  ]);
 
-  // Leads by source, won overlay (won = of these leads)
+  // Leads by source, and how many of them are won now
   const srcRows = await tx
     .select({ source: leads.source, n: sql<number>`count(*)::int`, won: sql<number>`count(*) filter (where ${leads.status} = 'won')::int` })
     .from(leads)
@@ -57,7 +63,7 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     return { source: r.source, leads: r.n, won: r.won, href: leadsHref(f), wonHref: leadsHref({ ...f, status: ["won"] }) };
   });
 
-  // Funnel
+  // Funnel: leads that came in during the range, by the furthest stage they reached
   const funnel = await Promise.all(
     FUNNEL.map(async (s) => {
       const f = s.filter(df);
@@ -65,67 +71,44 @@ export async function computeDashboard(tx: Tx, df: DashFilter, wc: WhereContext)
     }),
   );
 
-  // Leads per week (Toronto, Monday weeks), stacked by qualification
+  // Leads per month (or week), stacked by where they stand now
   // the zone is inlined (validated) so SELECT and GROUP BY are the identical expression
   if (!/^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(tz)) throw new Error(`bad timezone ${tz}`);
-  const weekExpr = sql<string>`to_char(date_trunc('week', ${leads.createdAt} at time zone '${sql.raw(tz)}'), 'YYYY-MM-DD')`;
-  const weekRows = await tx
-    .select({ week: weekExpr, q: leads.qualification, n: sql<number>`count(*)::int` })
+  const bucket = bucketFor(df);
+  const bucketExpr = sql<string>`to_char(date_trunc('${sql.raw(bucket)}', ${leads.createdAt} at time zone '${sql.raw(tz)}'), 'YYYY-MM-DD')`;
+  const rows = await tx
+    .select({ period: bucketExpr, status: leads.status, n: sql<number>`count(*)::int` })
     .from(leads)
     .where(bWhere)
-    .groupBy(weekExpr, leads.qualification)
-    .orderBy(weekExpr);
-  const weeksMap = new Map<string, Record<Qualification, number>>();
-  for (const r of weekRows) {
-    const w = weeksMap.get(r.week) ?? { qualified: 0, needs_info: 0, unqualified: 0 };
-    w[r.q as Qualification] = r.n;
-    weeksMap.set(r.week, w);
+    .groupBy(bucketExpr, leads.status)
+    .orderBy(bucketExpr);
+  const groupOf = new Map<Status, OutcomeKey>(OUTCOMES.flatMap((o) => o.statuses.map((s) => [s as Status, o.key] as const)));
+  const periods = new Map<string, Record<OutcomeKey, number>>();
+  for (const r of rows) {
+    const p = periods.get(r.period) ?? { open: 0, quote_out: 0, won: 0, lost: 0 };
+    p[groupOf.get(r.status as Status)!] += r.n;
+    periods.set(r.period, p);
   }
-  const weekly = [...weeksMap.entries()].map(([week, counts]) => {
-    // clamp the week to the selected range so the list shows exactly this bar
-    const from = week < df.from ? df.from : week;
-    const end = addDaysToDate(week, 6);
+  const trend = [...periods.entries()].map(([start, counts]) => {
+    // clamp the period to the selected range so the list shows exactly this bar
+    const from = start < df.from ? df.from : start;
+    const end = bucket === "month" ? lastOfMonth(start) : addDaysToDate(start, 6);
     const to = end > df.to ? df.to : end;
-    const wf: LeadFilter = { ...dims(df), created_from: from, created_to: to };
+    const pf: LeadFilter = { ...dims(df), created_from: from, created_to: to };
+    const d = new Date(start + "T12:00:00Z");
     return {
-      week,
-      label: new Date(week + "T12:00:00Z").toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" }),
+      period: start,
+      label: bucket === "month"
+        ? d.toLocaleDateString("en-CA", { month: "short", year: "2-digit", timeZone: "UTC" })
+        : d.toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" }),
       ...counts,
-      total: counts.qualified + counts.needs_info + counts.unqualified,
-      href: leadsHref(wf),
-      hrefs: {
-        qualified: leadsHref({ ...wf, qualification: ["qualified"] }),
-        needs_info: leadsHref({ ...wf, qualification: ["needs_info"] }),
-        unqualified: leadsHref({ ...wf, qualification: ["unqualified"] }),
-      },
+      total: counts.open + counts.quote_out + counts.won + counts.lost,
+      href: leadsHref(pf),
+      hrefs: Object.fromEntries(OUTCOMES.map((o) => [o.key, leadsHref({ ...pf, status: [...o.statuses] })])) as Record<OutcomeKey, string>,
     };
   });
 
-  // Quotes (revenue itself is tracked in the proposals tool)
-  const quotedInRange: LeadFilter = { ...dims(df), quoted_from: df.from, quoted_to: df.to };
-  const awaitingDecision: LeadFilter = { ...dims(df), status: ["proposal_sent"] };
-  const [sentCount, awaitingCount] = await Promise.all([countLeads(tx, quotedInRange, wc), countLeads(tx, awaitingDecision, wc)]);
-  const quotes = {
-    sent: { value: sentCount, href: leadsHref(quotedInRange) },
-    awaitingDecision: { value: awaitingCount, href: leadsHref(awaitingDecision) },
-  };
-
-  // Median days per stage (leads created in range)
-  const med = (a: unknown, b2: unknown) =>
-    sql<number | null>`percentile_cont(0.5) within group (order by extract(epoch from (${b2} - ${a})) / 86400) filter (where ${b2} is not null and ${a} is not null and ${b2} >= ${a})`;
-  const [stages] = await tx
-    .select({
-      toContact: med(leads.createdAt, leads.contactedAt),
-      toConsult: med(leads.contactedAt, leads.consultScheduledAt),
-      toProposal: med(sql`coalesce(${leads.consultHeldAt}, ${leads.consultScheduledAt})`, leads.proposalSentAt),
-      toWon: med(leads.proposalSentAt, leads.wonAt),
-      createdToWon: med(leads.createdAt, leads.wonAt),
-    })
-    .from(leads)
-    .where(bWhere);
-
-  return { cards, detail, bySource, funnel, weekly, quotes, stages };
+  return { cards, now, bySource, funnel, trend, bucket };
 }
 
 export type Dashboard = Awaited<ReturnType<typeof computeDashboard>>;
-export { and };

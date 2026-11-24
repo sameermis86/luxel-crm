@@ -5,8 +5,9 @@ import { listUsers } from "@/server/leads/queries";
 import { parseDashFilter, RANGE_LABELS } from "@/lib/metrics";
 import { fmtDate, titleCase } from "@/lib/format";
 import { SOURCES, EVENT_TYPES } from "@/db/schema";
-import { SourceChart, WeeklyChart } from "@/components/dashboard-charts";
+import { SourceChart, TrendChart } from "@/components/dashboard-charts";
 import { C } from "@/lib/chart-colors";
+import type { CardValue } from "@/server/dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +23,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   const { df, d, users } = data;
   const one = (v?: string[]) => (v?.length === 1 ? v[0] : "");
   const funnelMax = Math.max(1, d.funnel[0]?.value ?? 1);
-  const days = (n: number | null | undefined) => (n == null ? "—" : `${Number(n).toFixed(1)} d`);
-  const conversion = d.cards.find((c) => c.key === "conversion")!;
+  const leadsCount = d.cards.find((c) => c.key === "leads")!.value;
+  const rangeLabel = df.range && df.range !== "custom" ? RANGE_LABELS[df.range as keyof typeof RANGE_LABELS].toLowerCase() : `${fmtDate(df.from)} – ${fmtDate(df.to)}`;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl">Lead desk</h1>
         <p className="mt-1 text-sm text-muted">
-          {fmtDate(df.from)} – {fmtDate(df.to)} · every number opens the leads behind it
+          {fmtDate(df.from)} – {fmtDate(df.to)} · every number opens the leads behind it; hover a number for how it is counted
         </p>
       </div>
 
@@ -53,28 +54,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         <p className="w-full text-xs text-muted">Choose “Custom…” to use the From/To dates; the other ranges ignore them.</p>
       </form>
 
-      {/* Metric cards */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" aria-label="Key metrics">
-        {d.cards.map((c) => (
-          <Link key={c.key} href={c.href} className="card group block p-4 transition-colors hover:border-ink/40" title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value}>
-            <div className="text-xs tracking-wide text-muted uppercase">{c.label}</div>
-            <div className={`mt-1 font-display text-3xl tabular ${c.key === "awaiting" && c.value > 0 ? "text-bloom" : ""}`}>{c.display}</div>
-            {c.numerator ? (
-              <div className="mt-1 text-xs text-muted">{c.numerator.value} won of {c.denominator!.value} created</div>
-            ) : (
-              <div className="mt-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100">View leads →</div>
-            )}
-          </Link>
-        ))}
-      </section>
-      <div className="-mt-3 flex flex-wrap gap-4 text-xs text-muted">
-        {d.detail.map((r) => (
-          <span key={r.key} title={r.definition}>
-            {r.label}: <span className="font-medium text-ink">{r.display}</span>{" "}
-            (<Link className="underline" href={r.numerator!.href}>{r.numerator!.value}</Link> / <Link className="underline" href={r.denominator!.href}>{r.denominator!.value}</Link>)
-          </span>
-        ))}
-        <span>Conversion denominator: <Link className="underline" href={conversion.denominator!.href}>{conversion.denominator!.value} leads created in range</Link></span>
+      {/* Metric cards: the range group, then today */}
+      <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+        <section aria-labelledby="range-h">
+          <h2 id="range-h" className="mb-2 text-xs tracking-wide text-muted uppercase">Leads that came in · {rangeLabel}</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {d.cards.map((c) => (
+              <Card key={c.key} c={c} sub={c.numerator ? `${c.numerator.value} ${c.nouns![0]} of ${c.denominator!.value} ${c.nouns![1]}` : c.key !== "leads" && leadsCount ? `${Math.round((c.value / leadsCount) * 100)}% of leads` : "View leads →"} />
+            ))}
+          </div>
+        </section>
+        <section aria-labelledby="now-h">
+          <h2 id="now-h" className="mb-2 text-xs tracking-wide text-muted uppercase">Right now</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {d.now.map((c) => (
+              <Card key={c.key} c={c} sub="View leads →" alert={c.key === "awaiting" && c.value > 0} />
+            ))}
+          </div>
+        </section>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -90,7 +87,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
 
         <section className="card p-4">
           <h2 className="text-xl">Funnel</h2>
-          <p className="mb-3 text-xs text-muted">Leads created in range that reached each stage.</p>
+          <p className="mb-3 text-xs text-muted">Leads that came in during the range, by the furthest stage they have reached.</p>
           <ol className="space-y-2">
             {d.funnel.map((f, i) => {
               const prev = i ? d.funnel[i - 1].value : null;
@@ -112,41 +109,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
               );
             })}
           </ol>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-edge pt-3 text-xs sm:grid-cols-5">
-            <Stat k="New → contacted" v={days(d.stages.toContact)} />
-            <Stat k="Contacted → consult" v={days(d.stages.toConsult)} />
-            <Stat k="Consult → proposal" v={days(d.stages.toProposal)} />
-            <Stat k="Proposal → won" v={days(d.stages.toWon)} />
-            <Stat k="Created → won" v={days(d.stages.createdToWon)} />
-          </dl>
-          <p className="mt-1 text-[11px] text-muted">Median days per stage, for leads created in range.</p>
         </section>
       </div>
 
       <section className="card p-4">
-        <h2 className="text-xl">Leads per week</h2>
-        <p className="mb-2 text-xs text-muted">By qualification (weeks start Monday, Toronto time). Click a segment for those leads.</p>
-        <WeeklyChart data={d.weekly} />
+        <h2 className="text-xl">Leads per {d.bucket}</h2>
+        <p className="mb-2 text-xs text-muted">When leads came in, colored by where they stand now. Click a segment for those leads.</p>
+        <TrendChart data={d.trend} />
         <TableView
-          head={["Week of", "Qualified", "Needs info", "Unqualified", "Total"]}
-          rows={d.weekly.map((w) => [
-            w.label,
-            <Link key="q" className="underline" href={w.hrefs.qualified}>{w.qualified}</Link>,
-            <Link key="n" className="underline" href={w.hrefs.needs_info}>{w.needs_info}</Link>,
-            <Link key="u" className="underline" href={w.hrefs.unqualified}>{w.unqualified}</Link>,
-            <Link key="t" className="underline" href={w.href}>{w.total}</Link>,
+          head={[d.bucket === "month" ? "Month" : "Week of", "Open", "Quote out", "Won", "Lost / unqualified", "Total"]}
+          rows={d.trend.map((t) => [
+            t.label,
+            ...(["open", "quote_out", "won", "lost"] as const).map((k) => <Link key={k} className="underline" href={t.hrefs[k]}>{t[k]}</Link>),
+            <Link key="t" className="underline" href={t.href}>{t.total}</Link>,
           ])}
         />
-      </section>
-
-      <section className="card p-4">
-        <h2 className="text-xl">Quotes</h2>
-        <p className="text-xs text-muted">Quotes go out from the proposals tool; mark a lead “Proposal sent” here to track it. Revenue is tracked in the proposals tool.</p>
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <Big k="Quotes sent in range" v={String(d.quotes.sent.value)} href={d.quotes.sent.href} />
-          <Big k="Awaiting client decision" v={String(d.quotes.awaitingDecision.value)} href={d.quotes.awaitingDecision.href} />
-          <Big k="Quote → won (median)" v={days(d.stages.toWon)} />
-        </dl>
       </section>
     </div>
   );
@@ -164,23 +141,14 @@ function Sel({ name, label, value, options }: { name: string; label: string; val
   );
 }
 
-function Stat({ k, v }: { k: string; v: string }) {
+function Card({ c, sub, alert }: { c: CardValue; sub: string; alert?: boolean }) {
   return (
-    <div>
-      <dt className="text-muted">{k}</dt>
-      <dd className="font-medium tabular">{v}</dd>
-    </div>
+    <Link href={c.href} className="card group block p-4 transition-colors hover:border-ink/40" title={c.definition} data-metric={c.key} data-value={c.numerator ? c.numerator.value : c.value}>
+      <div className="text-xs tracking-wide text-muted uppercase">{c.label}</div>
+      <div className={`mt-1 font-display text-3xl tabular ${alert ? "text-bloom" : ""}`}>{c.display}</div>
+      <div className="mt-1 text-xs text-muted">{sub}</div>
+    </Link>
   );
-}
-
-function Big({ k, v, href }: { k: string; v: string; href?: string }) {
-  const inner = (
-    <>
-      <dt className="text-xs tracking-wide text-muted uppercase">{k}</dt>
-      <dd className="font-display text-2xl tabular">{v}</dd>
-    </>
-  );
-  return href ? <Link href={href} className="block rounded-md p-1 hover:bg-paper/60">{inner}</Link> : <div className="p-1">{inner}</div>;
 }
 
 function TableView({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {

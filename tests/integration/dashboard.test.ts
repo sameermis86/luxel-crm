@@ -59,7 +59,9 @@ async function countAtHref(ctx: Ctx, wc: WhereContext, href: string) {
 }
 
 const scenarios: [string, Record<string, string>][] = [
-  ["this month (default)", {}],
+  ["last 12 months (default)", {}],
+  ["this month", { range: "this_month" }],
+  ["a short range (weekly bars)", { from: "2026-10-01", to: "2026-11-23" }],
   ["custom Sep 1 – Nov 23", { from: "2026-09-01", to: "2026-11-23" }],
   ["last month", { range: "last_month" }],
   ["source + owner filter", { from: "2026-09-01", to: "2026-11-30", source: "instagram,referral", owner: "" }],
@@ -78,27 +80,25 @@ describe("acceptance: every dashboard number lists exactly that many records", (
         const d = await withCtx(who, (tx) => computeDashboard(tx, df, wc));
 
         const checks: [string, number, string][] = [];
-        for (const c of d.cards) {
+        for (const c of [...d.cards, ...d.now]) {
           if (c.numerator) {
             checks.push([`${c.key} numerator`, c.numerator.value, c.numerator.href]);
             checks.push([`${c.key} denominator`, c.denominator!.value, c.denominator!.href]);
           } else checks.push([c.key, c.value, c.href]);
-        }
-        for (const c of d.detail) {
-          checks.push([`${c.key} numerator`, c.numerator!.value, c.numerator!.href]);
-          checks.push([`${c.key} denominator`, c.denominator!.value, c.denominator!.href]);
         }
         for (const s of d.bySource) {
           checks.push([`source ${s.source}`, s.leads, s.href]);
           checks.push([`source ${s.source} won`, s.won, s.wonHref]);
         }
         for (const f of d.funnel) checks.push([`funnel ${f.key}`, f.value, f.href]);
-        for (const w of d.weekly) {
-          checks.push([`week ${w.week}`, w.total, w.href]);
-          for (const q of ["qualified", "needs_info", "unqualified"] as const) checks.push([`week ${w.week} ${q}`, w[q], w.hrefs[q]]);
+        for (const t of d.trend) {
+          checks.push([`${d.bucket} ${t.period}`, t.total, t.href]);
+          for (const k of ["open", "quote_out", "won", "lost"] as const) checks.push([`${d.bucket} ${t.period} ${k}`, t[k], t.hrefs[k]]);
         }
-        checks.push(["quotes sent", d.quotes.sent.value, d.quotes.sent.href]);
-        checks.push(["quotes awaiting decision", d.quotes.awaitingDecision.value, d.quotes.awaitingDecision.href]);
+        // every "in range" number is a subset of the leads that came in
+        const leadsN = d.cards.find((c) => c.key === "leads")!.value;
+        for (const c of d.cards) expect(c.numerator ? c.denominator!.value : c.value).toBeLessThanOrEqual(leadsN);
+        expect(d.trend.reduce((s, t) => s + t.total, 0)).toBe(leadsN);
 
         expect(checks.length).toBeGreaterThan(10);
         for (const [label, value, href] of checks) {
@@ -114,25 +114,34 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     const wc: WhereContext = { now: NOW, userId: null, settings };
     const d = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ from: "2026-08-31", to: "2026-11-30" }, NOW, TZ), wc));
     // (lead 0 is 00:00 UTC Sep 1 = 8pm Aug 31 in Toronto, so the range starts Aug 31)
-    const card = (k: string) => d.cards.find((c) => c.key === k)!;
-    expect(card("total").value).toBe(60);
-    expect(card("qualified").value + card("unqualified").value).toBeLessThanOrEqual(60);
-    expect(card("conversion").numerator!.value).toBe(4); // i = 0, 16, 32, 48
+    const card = (k: string) => [...d.cards, ...d.now].find((c) => c.key === k)!;
+    expect(card("leads").value).toBe(60);
+    expect(d.bucket).toBe("week"); // 91 days
+    expect(card("quoted").value).toBe(8); // proposals for i % 8 === 0, incl. the 4 later won
+    expect(card("won").value).toBe(4); // i = 0, 16, 32, 48
+    expect(card("win_rate").numerator!.value).toBe(4);
+    expect(card("win_rate").denominator!.value).toBe(11); // 4 won + 7 lost (i % 8 === 4)
+    expect(card("awaiting_decision").value).toBe(4);
     expect(d.funnel.map((f) => f.value)).toEqual([...d.funnel.map((f) => f.value)].sort((a, b) => b - a)); // monotone
     expect(d.bySource.reduce((s, x) => s + x.leads, 0)).toBe(60);
-    expect(d.weekly.reduce((s, w) => s + w.total, 0)).toBe(60);
-    // proposals sent for i % 8 === 0 (8 leads); 4 of those went on to be won
-    expect(card("quotes_sent").value).toBe(8);
-    expect(d.quotes.awaitingDecision.value).toBe(4);
+    const sum = (k: "open" | "quote_out" | "won" | "lost") => d.trend.reduce((s, t) => s + t[k], 0);
+    expect([sum("quote_out"), sum("won"), sum("lost")]).toEqual([4, 4, 7]);
   });
 
-  it("'new leads this month' ignores the range filter", async () => {
+  it("a status synced today for an older lead doesn't count toward this month", async () => {
+    // e.g. Goodshuffle marks a July lead Signed today: it belongs to July's numbers
     const settings = await withCtx(env.sys, (tx) => getSettings(tx, env.orgId));
     const wc: WhereContext = { now: NOW, userId: null, settings };
-    const a = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ range: "last_month" }, NOW, TZ), wc));
-    const b = await withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ range: "ytd" }, NOW, TZ), wc));
-    const v = (x: typeof a) => x.cards.find((c) => c.key === "new_this_month")!.value;
-    expect(v(a)).toBe(v(b));
-    expect(v(a)).toBeGreaterThan(0);
+    const month = () => withCtx(env.sys, (tx) => computeDashboard(tx, parseDashFilter({ range: "this_month" }, NOW, TZ), wc));
+    const before = await month();
+    const old = await withCtx(env.sys, (tx) =>
+      createLead(tx, env.sys, { firstName: "July", lastName: "Lead", email: "july@example.com" }, { createdAt: new Date("2026-07-02T15:00:00Z"), now: new Date("2026-07-02T15:00:00Z") }),
+    );
+    await withCtx(env.sys, (tx) => updateLead(tx, env.sys, old.id, { status: "won" }, { now: new Date(NOW.getTime() - 60_000) }));
+    const after = await month();
+    for (const k of ["leads", "quoted", "won", "win_rate"]) {
+      const v = (d: typeof before) => { const c = d.cards.find((x) => x.key === k)!; return c.numerator ? [c.numerator.value, c.denominator!.value] : c.value; };
+      expect(v(after)).toEqual(v(before));
+    }
   });
 });

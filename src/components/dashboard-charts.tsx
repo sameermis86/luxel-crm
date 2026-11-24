@@ -63,35 +63,42 @@ export function SourceChart({ data }: { data: { label: string; leads: number; wo
   );
 }
 
-export function WeeklyChart({ data }: { data: { label: string; qualified: number; needs_info: number; unqualified: number; hrefs: Record<string, string> }[] }) {
+type Outcome = "open" | "quote_out" | "won" | "lost";
+const OUTCOME_SERIES: { key: Outcome; label: string }[] = [
+  { key: "open", label: "Open" },
+  { key: "quote_out", label: "Quote out" },
+  { key: "won", label: "Won" },
+  { key: "lost", label: "Lost / unqualified" },
+];
+
+/** Leads per period, stacked by where they stand now. */
+export function TrendChart({ data }: { data: ({ label: string; hrefs: Record<Outcome, string> } & Record<Outcome, number>)[] }) {
   const router = useRouter();
   if (!data.length) return <Empty />;
-  const seg = (key: "qualified" | "needs_info" | "unqualified", name: string, top: boolean) => (
-    <Bar
-      isAnimationActive={false}
-      dataKey={key}
-      name={name}
-      stackId="q"
-      fill={C[key]}
-      stroke="#FFFFFF"
-      strokeWidth={2}
-      radius={top ? [4, 4, 0, 0] : 0}
-      cursor="pointer"
-      onClick={(d: any) => router.push((d.payload ?? d).hrefs[key])}
-    />
-  );
   return (
     <>
-    <ChartLegend items={[{ label: "Qualified", color: C.qualified }, { label: "Needs info", color: C.needs_info }, { label: "Unqualified", color: C.unqualified }]} />
+    <ChartLegend items={OUTCOME_SERIES.map((o) => ({ label: o.label, color: C[o.key] }))} />
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={data} margin={{ left: -16, right: 8, top: 8, bottom: 0 }} barCategoryGap="18%">
         <CartesianGrid vertical={false} stroke={C.grid} />
         <XAxis dataKey="label" {...axisProps} />
         <YAxis allowDecimals={false} {...axisProps} />
         <Tooltip content={<TooltipBox />} cursor={{ fill: "rgba(27,36,32,0.04)" }} />
-        {seg("qualified", "Qualified", false)}
-        {seg("needs_info", "Needs info", false)}
-        {seg("unqualified", "Unqualified", true)}
+        {OUTCOME_SERIES.map((o, i) => (
+          <Bar
+            key={o.key}
+            isAnimationActive={false}
+            dataKey={o.key}
+            name={o.label}
+            stackId="s"
+            fill={C[o.key]}
+            stroke="#FFFFFF"
+            strokeWidth={2}
+            radius={i === OUTCOME_SERIES.length - 1 ? [4, 4, 0, 0] : 0}
+            cursor="pointer"
+            onClick={(d: any) => router.push((d.payload ?? d).hrefs[o.key])}
+          />
+        ))}
       </BarChart>
     </ResponsiveContainer>
     </>
