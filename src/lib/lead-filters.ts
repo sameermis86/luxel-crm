@@ -134,8 +134,8 @@ export interface WhereContext {
   settings: Pick<Settings, "followUps" | "businessHours">;
 }
 
-/** Open = not won/lost/unqualified. */
-export const openLeadSql = sql`${leads.status} not in ('won', 'lost', 'unqualified')`;
+/** Open = not won/lost/unqualified/not reachable. */
+export const openLeadSql = sql`${leads.status} not in ('won', 'lost', 'unqualified', 'not_reachable')`;
 
 /** §10: open lead whose follow-up is due, or new and untouched for 24h, or with no follow-up at all. */
 export function awaitingFollowUpSql(now: Date, noContactHours: number): SQL {

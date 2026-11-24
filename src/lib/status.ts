@@ -4,25 +4,26 @@ import type { LostReason, Status } from "@/db/schema";
 const OPEN: Status[] = ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "on_hold"];
 
 export const TRANSITIONS: Record<Status, Status[]> = {
-  new: ["contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold"],
-  contacted: ["new", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold"],
-  consult_scheduled: ["contacted", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold"],
+  new: ["contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold", "not_reachable"],
+  contacted: ["new", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold", "not_reachable"],
+  consult_scheduled: ["contacted", "consult_held", "proposal_sent", "won", "lost", "unqualified", "on_hold", "not_reachable"],
   consult_held: ["consult_scheduled", "proposal_sent", "won", "lost", "unqualified", "on_hold"],
   proposal_sent: ["consult_held", "won", "lost", "on_hold"],
-  on_hold: ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified"],
+  on_hold: ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost", "unqualified", "not_reachable"],
   won: ["lost"], // cancellation
   lost: ["new", "contacted", "consult_scheduled", "proposal_sent"], // reopen
   unqualified: ["new", "contacted"], // reopen
+  not_reachable: ["new", "contacted", "consult_scheduled", "consult_held", "proposal_sent", "won", "lost"], // they got back in touch
 };
 
 export const OPEN_STATUSES = OPEN;
-export const CLOSED_STATUSES: Status[] = ["won", "lost", "unqualified"];
+export const CLOSED_STATUSES: Status[] = ["won", "lost", "unqualified", "not_reachable"];
 export const isOpen = (s: Status) => !CLOSED_STATUSES.includes(s);
 
 /** Funnel order. on_hold/lost/unqualified don't advance the funnel. */
 export const FUNNEL_RANK: Record<Status, number> = {
   new: 0, contacted: 1, consult_scheduled: 2, consult_held: 3, proposal_sent: 4, won: 5,
-  on_hold: 0, lost: 0, unqualified: 0,
+  on_hold: 0, lost: 0, unqualified: 0, not_reachable: 0,
 };
 export const FUNNEL_STAGES = [
   { key: "new", label: "New", rank: 0 },
@@ -45,6 +46,7 @@ export const STAGE_TIMESTAMP: Partial<Record<Status, string>> = {
 export const STATUS_LABELS: Record<Status, string> = {
   new: "New", contacted: "Contacted", consult_scheduled: "Consult scheduled", consult_held: "Consult held",
   proposal_sent: "Proposal sent", won: "Won", lost: "Lost", unqualified: "Unqualified", on_hold: "On hold",
+  not_reachable: "Not reachable",
 };
 export const LOST_REASON_LABELS: Record<LostReason, string> = {
   price: "Price", date_unavailable: "Date unavailable", went_with_competitor: "Went with competitor",

@@ -127,10 +127,9 @@ describe("acceptance: every dashboard number lists exactly that many records", (
     expect(d.bucket).toBe("week"); // 91 days
     expect([card("ch_quote_builder").value, card("ch_contact_us_form").value, card("ch_goodshuffle").value, card("ch_other").value]).toEqual([15, 15, 15, 15]);
     expect(card("quotes").value).toBe(20);
-    for (const k of ["q_quote_sent", "q_action_needed", "q_signed", "q_lost"]) {
-      expect(card(k).numerator!.value).toBe(5);
-      expect(card(k).display).toBe("25%");
-    }
+    // action needed counts as signed
+    expect([card("q_quote_sent").numerator!.value, card("q_signed").numerator!.value, card("q_lost").numerator!.value]).toEqual([5, 10, 5]);
+    expect([card("q_quote_sent").display, card("q_signed").display, card("q_lost").display]).toEqual(["25%", "50%", "25%"]);
     expect(d.pipeline.find((p) => p.key === "quote_out")!.value).toBe(4);
     expect(card("needs_follow_up").value).toBeGreaterThan(0);
   });

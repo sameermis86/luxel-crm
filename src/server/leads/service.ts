@@ -321,7 +321,7 @@ export async function updateLead(
   await writeEvents(tx, ctx, leadId, events);
 
   // closing a lead closes its open follow-ups
-  if (fields.status && ["won", "lost", "unqualified"].includes(fields.status) && fields.status !== current.status) {
+  if (fields.status && ["won", "lost", "unqualified", "not_reachable"].includes(fields.status) && fields.status !== current.status) {
     const open = await tx.select({ id: followUps.id }).from(followUps).where(and(eq(followUps.leadId, leadId), isNull(followUps.doneAt)));
     for (const f of open) await completeFollowUp(tx, ctx, f.id, now, { reason: `lead ${fields.status}` });
     if (open.length) {

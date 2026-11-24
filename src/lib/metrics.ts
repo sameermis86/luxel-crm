@@ -135,10 +135,10 @@ export const OTHER_CHANNELS = SOURCES.filter((s) => !CHANNELS.some((c) => c.key 
 
 /** Goodshuffle quote stages. Total quotes = their sum; each is reported as a share of it. */
 export const QUOTE_STAGES = [
-  { key: "quote_sent", label: "Quote sent" },
-  { key: "action_needed", label: "Action needed" },
-  { key: "signed", label: "Signed" },
-  { key: "lost", label: "Lost" },
+  { key: "quote_sent", label: "Quote sent", gs: ["quote_sent"] },
+  // Goodshuffle's "Action needed" is a signed contract with something outstanding: counted as signed
+  { key: "signed", label: "Signed", gs: ["signed", "action_needed"] },
+  { key: "lost", label: "Lost", gs: ["lost"] },
 ] as const;
 export type QuoteStage = (typeof QUOTE_STAGES)[number]["key"];
 
@@ -154,15 +154,15 @@ export function leadCards(df: DashFilter): CountMetric[] {
 
 export function quoteCards(df: DashFilter): Metric[] {
   const b = base(df);
-  const all: LeadFilter = { ...b, gs: QUOTE_STAGES.map((q) => q.key) };
+  const all: LeadFilter = { ...b, gs: QUOTE_STAGES.flatMap((q) => [...q.gs]) };
   return [
-    { key: "quotes", label: "Total quotes", definition: "Leads from the range with a Goodshuffle quote: signed + action needed + quote sent + lost.", kind: "count", filter: all },
+    { key: "quotes", label: "Total quotes", definition: "Leads from the range with a Goodshuffle quote: quote sent + signed (incl. action needed) + lost.", kind: "count", filter: all },
     ...QUOTE_STAGES.map((q): RatioMetric => ({
       key: `q_${q.key}`,
       label: q.label,
       definition: `Quotes at Goodshuffle stage “${q.label}”, as a share of all quotes.`,
       kind: "ratio",
-      numerator: { ...b, gs: [q.key] },
+      numerator: { ...b, gs: [...q.gs] },
       denominator: all,
       nouns: [q.label.toLowerCase(), "quotes"],
     })),

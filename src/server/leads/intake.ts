@@ -191,7 +191,7 @@ export async function ingestLead(tx: Tx, ctx: Ctx, input: IngestInput, opts: Ing
   }
 
   // 7. First follow-up (within N business hours)
-  const open = !["won", "lost", "unqualified"].includes(current.status);
+  const open = !["won", "lost", "unqualified", "not_reachable"].includes(current.status);
   if (open && (opts.autoFollowUp ?? opts.mode !== "import")) {
     await setFollowUp(
       tx,

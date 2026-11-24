@@ -50,6 +50,8 @@ export const STATUSES = [
   "lost",
   "unqualified",
   "on_hold",
+  /** couldn't reach them after their inquiry (different from Lost: a quote that was declined) */
+  "not_reachable",
 ] as const;
 export const ROLES = ["owner", "manager", "staff"] as const;
 export const ACTOR_KINDS = ["user", "system", "webhook", "import"] as const;

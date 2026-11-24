@@ -22,7 +22,7 @@ export async function autoAssign(tx: Tx, ctx: Ctx, lead: Lead, settings?: Settin
             eq(leads.orgId, ctx.orgId),
             isNull(leads.duplicateOfId),
             isNull(leads.archivedAt),
-            notInArray(leads.status, ["won", "lost", "unqualified"]),
+            notInArray(leads.status, ["won", "lost", "unqualified", "not_reachable"]),
           ),
         )
         .groupBy(leads.ownerId),

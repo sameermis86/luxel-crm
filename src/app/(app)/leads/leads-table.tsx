@@ -122,7 +122,7 @@ export function LeadsTable(props: {
               </tr>
             )}
             {rows.map((r) => {
-              const overdue = r.nextFollowUpAt && new Date(r.nextFollowUpAt) < now && !["won", "lost", "unqualified"].includes(r.status);
+              const overdue = r.nextFollowUpAt && new Date(r.nextFollowUpAt) < now && !["won", "lost", "unqualified", "not_reachable"].includes(r.status);
               return (
                 <tr key={r.id} className="hover:bg-paper/50">
                   {props.canBulk && (

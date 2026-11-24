@@ -31,7 +31,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const { lead, owner, mergedInto, mergedChildren, followUps, duplicates } = detail;
   const readOnly = !!lead.duplicateOfId || !!lead.archivedAt;
   const openFollowUps = followUps.filter((f) => !f.f.doneAt);
-  const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified"].includes(lead.status);
+  const overdue = lead.nextFollowUpAt && lead.nextFollowUpAt < page.now && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status);
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
 
   return (
@@ -174,7 +174,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
                 </li>
               ))}
             </ul>
-            {openFollowUps.length === 0 && !readOnly && !["won", "lost", "unqualified"].includes(lead.status) && (
+            {openFollowUps.length === 0 && !readOnly && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status) && (
               <p className="mt-2 text-xs text-bloom">No follow-up set: this lead counts as awaiting follow-up.</p>
             )}
           </section>

@@ -170,7 +170,7 @@ export async function changeStatusAction(leadId: string, _: ActionResult | null,
       if (status === "consult_scheduled" && consultAt) {
         await logActivity(tx, ctx, leadId, { kind: "meeting", summary: `Consult booked for ${str(fd, "consultAt")?.replace("T", " ")}`, occurredAt: new Date() });
       }
-      if (fd.get("setFollowUp") === "1" && !["won", "lost", "unqualified"].includes(lead.status)) {
+      if (fd.get("setFollowUp") === "1" && !["won", "lost", "unqualified", "not_reachable"].includes(lead.status)) {
         const s = await getSettings(tx, ctx.orgId);
         await setFollowUp(tx, ctx, leadId, { dueAt: suggestNextFollowUp(status, new Date(), s.followUps, consultAt), note: `After status → ${status.replace(/_/g, " ")}` });
       }
@@ -199,7 +199,7 @@ export async function changeStatusInlineAction(
     if (status === "unqualified") patch.unqualifiedReason = z.string().trim().min(1, "Give a reason").max(500).parse(input.unqualifiedReason ?? "");
     const lead = await withCtx(ctx, async (tx) => {
       const { lead } = await updateLead(tx, ctx, z.string().uuid().parse(leadId), patch as any);
-      if (!["won", "lost", "unqualified"].includes(lead.status) && !lead.nextFollowUpAt) {
+      if (!["won", "lost", "unqualified", "not_reachable"].includes(lead.status) && !lead.nextFollowUpAt) {
         const s = await getSettings(tx, ctx.orgId);
         await setFollowUp(tx, ctx, lead.id, { dueAt: suggestNextFollowUp(status, new Date(), s.followUps), note: `After status → ${status.replace(/_/g, " ")}` });
       }

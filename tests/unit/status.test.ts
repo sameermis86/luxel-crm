@@ -26,3 +26,15 @@ describe("status transitions", () => {
   });
   it("funnel ranks", () => expect(FUNNEL_RANK.won).toBeGreaterThan(FUNNEL_RANK.proposal_sent));
 });
+
+describe("not reachable", () => {
+  it("closes an open lead without a reason, and reopens when they get back in touch", async () => {
+    const { canTransition, validateTransition, isOpen } = await import("@/lib/status");
+    expect(canTransition("new", "not_reachable")).toBe(true);
+    expect(validateTransition("contacted", "not_reachable", {}).ok).toBe(true);
+    expect(isOpen("not_reachable")).toBe(false);
+    expect(canTransition("not_reachable", "contacted")).toBe(true);
+    expect(canTransition("not_reachable", "won")).toBe(true);
+    expect(canTransition("proposal_sent", "not_reachable")).toBe(false); // a quote that goes quiet is Lost
+  });
+});

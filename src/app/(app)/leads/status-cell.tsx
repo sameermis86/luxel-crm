@@ -16,6 +16,7 @@ const TONE: Record<Status, string> = {
   won: "border-stem bg-stem text-white",
   lost: "border-edge bg-paper text-muted",
   unqualified: "border-edge bg-paper text-muted",
+  not_reachable: "border-dashed border-edge bg-card text-muted",
   on_hold: "border-edge bg-paper text-muted",
 };
 

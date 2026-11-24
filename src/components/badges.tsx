@@ -11,6 +11,7 @@ const STATUS_STYLE: Record<Status, string> = {
   lost: "border-edge bg-paper text-muted",
   unqualified: "border-edge bg-paper text-muted",
   on_hold: "border-edge bg-paper text-muted",
+  not_reachable: "border-dashed border-edge bg-card text-muted",
 };
 
 export function StatusPill({ status }: { status: Status }) {

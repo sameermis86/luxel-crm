@@ -3,7 +3,7 @@ import type { Tx } from "@/db/client";
 import { followUps, leads, users } from "@/db/schema";
 import { startOfDayInTz, dateInTz } from "@/lib/dates";
 
-const liveOpenLead = and(isNull(leads.duplicateOfId), isNull(leads.archivedAt), notInArray(leads.status, ["won", "lost", "unqualified"]));
+const liveOpenLead = and(isNull(leads.duplicateOfId), isNull(leads.archivedAt), notInArray(leads.status, ["won", "lost", "unqualified", "not_reachable"]));
 
 export interface FollowUpRow {
   id: string;

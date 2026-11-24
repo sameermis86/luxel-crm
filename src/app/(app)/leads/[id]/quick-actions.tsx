@@ -163,7 +163,7 @@ function FollowUpForm({ leadId, defaultDue, users, ownerId, onDone }: { leadId: 
 function StatusForm(props: { leadId: string; allowed: { value: Status; label: string }[]; quoteValue: number | null; onDone: () => void }) {
   const [to, setTo] = useState<Status>(props.allowed[0]?.value ?? "contacted");
   const { state, run, pending } = useFormAction(changeStatusAction.bind(null, props.leadId), props.onDone);
-  const closing = ["won", "lost", "unqualified"].includes(to);
+  const closing = ["won", "lost", "unqualified", "not_reachable"].includes(to);
   return (
     <form action={run} className="mt-3 grid gap-3 rounded-md border border-edge bg-paper/50 p-3 sm:grid-cols-4">
       <label className="block">

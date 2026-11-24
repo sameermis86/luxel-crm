@@ -85,7 +85,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
       {/* Quotes: total = sent + action needed + signed + lost; each as a share of total */}
       <section className="card overflow-hidden" aria-labelledby="quotes-h">
         <SectionHead id="quotes-h" title="Quotes" note={`Goodshuffle stage of those leads · ${share(quotesTotal.value, leadsN)} of leads got a quote`} />
-        <div className="grid grid-cols-2 sm:grid-cols-5 sm:divide-x sm:divide-edge max-sm:[&>*]:border-b max-sm:[&>*]:border-edge">
+        <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x sm:divide-edge max-sm:[&>*]:border-b max-sm:[&>*]:border-edge">
           <Kpi c={quotesTotal} sub={stages.map((q) => q.numerator!.value).join(" + ")} strong />
           {stages.map((q) => (
             <Kpi key={q.key} c={q} sub={`${q.numerator!.value} of ${q.denominator!.value} quotes`} swatch={C[q.key as keyof typeof C]} />

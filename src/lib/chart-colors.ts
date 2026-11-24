@@ -4,7 +4,7 @@
  *   qualified #3D8A5F / needs info #D4A017 / unqualified #8B6BB8
  *   series order blue #5B7FC7 / gold #D4A017 / green #3D8A5F / purple #8B6BB8 passes (CVD worst ΔE 13.3);
  *   blue next to purple FAILS (ΔE 2.5 deutan), so keep that order:
- *   channels: Quote Builder / Contact form / Goodshuffle / Other; quote stages: sent / action needed / signed / lost
+ *   channels: Quote Builder / Contact form / Goodshuffle / Other; quote stages: sent (blue) / signed incl. action needed (green) / lost (purple)
  * Gold is under 3:1 contrast, so values are always available as text (tooltip, labels, table view).
  */
 export const C = {
@@ -21,7 +21,6 @@ export const C = {
   ch_goodshuffle: "#3D8A5F",
   ch_other: "#8B6BB8",
   q_quote_sent: "#5B7FC7",
-  q_action_needed: "#D4A017",
   q_signed: "#3D8A5F",
   q_lost: "#8B6BB8",
   grid: "#ECE8E0",

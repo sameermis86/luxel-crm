@@ -10,7 +10,7 @@ Lead management for Luxel Decor & Flowers (Vaughan, ON). Single tenant today, `o
 - **Every DB call runs inside `withCtx(ctx, fn)`** so RLS context is set. Authorization goes through `authorize()` in `src/server/auth.ts`.
 - **Every dashboard number is a `LeadFilter` defined in `src/lib/metrics.ts`.** Never compute a dashboard count with ad-hoc SQL that the leads list can't reproduce. Extend `lead-filters.ts` instead, and add the case to `tests/integration/dashboard.test.ts`.
 - **No lead score and no qualification tag** (both removed). Don't reintroduce them; the "Unqualified" status remains as a manual status.
-- **Dashboard definitions:** Total leads = Quote Builder + Contact form + Goodshuffle (+ Other: manual/no channel), by `capture_channel`. Total quotes = Goodshuffle stages quote sent + action needed + signed + lost (`leads.goodshuffle_status`); each stage is shown as a share of total quotes.
+- **Dashboard definitions:** Total leads = Quote Builder + Contact form + Goodshuffle (+ Other: manual/no channel), by `capture_channel`. Total quotes = Goodshuffle stages quote sent + signed (Goodshuffle "Action needed" counts as signed) + lost (`leads.goodshuffle_status`); each is shown as a share of total quotes.
 - **Dashboard "in range" numbers are cohort counts:** leads created in the range, by where they stand now. Never count by won_at/proposal_sent_at: synced statuses carry the sync date. The action queue (`nextActions` in `metrics.ts`) is today's work, not range-limited.
 - Tunables live in `src/lib/config/defaults.ts` (overridable per org in Settings). No magic numbers in business logic.
 - Zod on every boundary (server actions, webhook, import).
