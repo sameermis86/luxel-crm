@@ -17,3 +17,20 @@ one tap at a time from the phone's own Messages app, from the office number, at 
 
 On a Mac signed in to the same Apple ID with iPhone Text Message Forwarding on, the `sms:` links open Messages
 on the Mac and send from the iPhone's number too.
+
+# Reminder emails (reviewed, sent from info@)
+
+Same page (**Reminders**, `/reminders`; `/texts` redirects) and the lead page **Reminder** panel have an **Email** tab.
+Pick a template, edit subject and text, click **Send email** (with a confirm). Never automatic.
+
+- Sent over SMTP with the mailbox login (`MAILBOX_IMAP_USER` / `MAILBOX_IMAP_PASSWORD`; host `MAILBOX_SMTP_HOST` or the IMAP
+  host, port `MAILBOX_SMTP_PORT` 465), from "{sender name}" <info@…>, reply-to info@. The exact message is also saved to the
+  mailbox's Sent folder (IMAP append; if that fails the send still counts and the UI says so).
+- Logged on the lead as an outbound email (`via: "crm"`, `messageId`). The mailbox sync sees the copy in Sent with the same
+  Message-ID and doesn't log it again. Counts as contact like any email; sets the next follow-up if none.
+- Rules: `emailEligibility` (same CASL consent window as texts, valid address, not unsubscribed, lead open). The queue's
+  spacing counts the last text or outbound email of either kind.
+- Every email ends with the sender name, Settings → Reminders: emails → sign-off, and an unsubscribe link:
+  `/unsubscribe/<token>` (public; HMAC token from `UNSUBSCRIBE_SECRET`, falling back to `CRON_SECRET`). The link opens a
+  confirm button (POST) so mail scanners can't unsubscribe anyone; it sets `leads.email_opt_out_at`. Staff can also tick
+  **Unsubscribed from emails** on the lead.

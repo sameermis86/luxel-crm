@@ -29,3 +29,19 @@ describe("sms rules", () => {
     expect(textable("+442071234567")).toBe(false);
   });
 });
+
+import { emailEligibility, renderEmail, emailFooter } from "@/lib/sms";
+describe("email reminders", () => {
+  it("fills subject and body; the footer names the sender and has the unsubscribe link", () => {
+    const r = renderEmail({ subject: "Your {event}{event_date}", body: "Hi {first_name},\n\nAbout{venue}." }, lead(), { senderName: "Mansi", signature: "Luxel", unsubscribeUrl: "" });
+    expect(r).toEqual({ subject: "Your wedding on June 12", body: "Hi Sofia,\n\nAbout at Hazelton Manor." });
+    expect(emailFooter({ senderName: "Mansi", signature: "Luxel Decor", unsubscribeUrl: "https://x/u/1" })).toBe("\n\nMansi\nLuxel Decor\n\nDon't want these emails? Unsubscribe: https://x/u/1");
+  });
+  it("same consent rules as texts, plus a valid address and no unsubscribe", () => {
+    const e = (over: Partial<Parameters<typeof emailEligibility>[0]> = {}) => emailEligibility({ ...lead(), email: "sofia@gmail.com", emailOptOutAt: null, ...over }, now, s, null);
+    expect(e()).toEqual({ ok: true });
+    expect(e({ email: null }).ok).toBe(false);
+    expect(e({ emailOptOutAt: now })).toMatchObject({ ok: false, reason: "Unsubscribed from emails" });
+    expect(e({ createdAt: new Date("2026-01-01T00:00:00Z") }).ok).toBe(false);
+  });
+});

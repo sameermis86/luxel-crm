@@ -185,6 +185,8 @@ export const leads = pgTable(
     eventDate: date("event_date"),
     /** they asked not to be texted (replied STOP): no more SMS reminders */
     smsOptOutAt: ts("sms_opt_out_at"),
+    /** they unsubscribed from reminder emails (link in the email, or marked by hand) */
+    emailOptOutAt: ts("email_opt_out_at"),
     venueName: text("venue_name"),
     venueCity: text("venue_city"),
     guestCount: integer("guest_count"),

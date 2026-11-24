@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withCtx, closeDb } from "@/db/client";
 import { leads } from "@/db/schema";
 import { createLead, logActivity, updateLead } from "@/server/leads/service";
-import { textQueue, lastTexts } from "@/server/sms";
+import { reminderQueue as textQueue, lastTexts } from "@/server/sms";
 import { getSettings } from "@/server/settings";
 import { freshOrg } from "../helpers";
 

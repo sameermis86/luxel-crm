@@ -62,6 +62,7 @@ export const leadFieldsSchema = z.object({
   nextFollowUpAt: z.date().nullable(),
   lastContactedAt: z.date().nullable(),
   smsOptOutAt: z.date().nullable(),
+  emailOptOutAt: z.date().nullable(),
   firstReplyAt: z.date().nullable(),
   quoteValue: money.nullable(),
 });

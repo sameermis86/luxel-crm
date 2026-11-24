@@ -69,7 +69,7 @@ export default async function SettingsPage() {
 
         {/* SMS reminders */}
         <section className="card p-5" id="sms">
-          <h2 className="text-[19px]">Text reminders</h2>
+          <h2 className="text-[19px]">Reminders: texts</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Texts go out from the office iPhone (Texts to send, or Text reminder on a lead). Placeholders: <code>{"{first_name}"}</code> <code>{"{event}"}</code>{" "}
             <code>{"{event_date}"}</code> <code>{"{venue}"}</code> <code>{"{sender}"}</code>. Every text names the sender and ends with &ldquo;Reply STOP to opt out.&rdquo;
@@ -77,7 +77,7 @@ export default async function SettingsPage() {
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-4">
             <label className="block"><span className="label">Signed as</span><input name="sms.senderName" defaultValue={s.sms.senderName} className="input w-72" /></label>
-            <N name="sms.minDaysBetween" value={s.sms.minDaysBetween} label="Days between texts to a lead" w="w-28" />
+            <N name="sms.minDaysBetween" value={s.sms.minDaysBetween} label="Days between reminders to a lead" w="w-28" />
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {[...s.sms.templates, { label: "", body: "" }].slice(0, 6).map((t, i) => (
@@ -90,6 +90,30 @@ export default async function SettingsPage() {
             ))}
           </div>
           <p className="hint">Clear a template&apos;s text to remove it.</p>
+        </section>
+
+        {/* Reminder emails */}
+        <section className="card p-5" id="emails">
+          <h2 className="text-[19px]">Reminders: emails</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            Sent from the info@ mailbox only when someone reviews one and clicks Send (Reminders page, or Reminder on a lead). Same placeholders as texts.
+            Every email ends with the name above, this sign-off and an unsubscribe link.
+          </p>
+          <label className="mt-3 block max-w-xl"><span className="label">Sign-off (under the name)</span>
+            <textarea name="emailReminders.signature" rows={2} defaultValue={s.emailReminders.signature} className="input text-[13px]" />
+          </label>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {[...s.emailReminders.templates, { label: "", subject: "", body: "" }].slice(0, 6).map((t, i) => (
+              <div key={i} className="space-y-2 rounded-[var(--radius-control)] border border-edge p-3">
+                <label className="block"><span className="label">{t.body ? `Email ${i + 1}` : "Add an email"}</span>
+                  <input name={`emailReminders.templates.${i}.label`} defaultValue={t.label} placeholder="Name, e.g. Quote follow-up" className="input" />
+                </label>
+                <input name={`emailReminders.templates.${i}.subject`} defaultValue={t.subject} placeholder="Subject" className="input text-[13px]" aria-label={`Email ${i + 1} subject`} />
+                <textarea name={`emailReminders.templates.${i}.body`} defaultValue={t.body} rows={5} placeholder={"Hi {first_name},\n\n…"} className="input text-[13px]" aria-label={`Email ${i + 1} text`} />
+              </div>
+            ))}
+          </div>
+          <p className="hint">Clear an email&apos;s text to remove it.</p>
         </section>
 
         {/* Planners & partners */}

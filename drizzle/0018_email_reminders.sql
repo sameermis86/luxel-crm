@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "email_opt_out_at" timestamp with time zone;

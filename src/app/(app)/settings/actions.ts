@@ -39,6 +39,7 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
     const next: any = structuredClone(DEFAULT_SETTINGS);
     next.businessHours.days = [];
     const smsTemplates: { label: string; body: string }[] = [];
+    const emailTemplates: { label: string; subject: string; body: string }[] = [];
     for (const [k, raw] of fd.entries()) {
       if (k.startsWith("$") || typeof raw !== "string") continue;
       if (k === "businessHours.timezone") {
@@ -50,6 +51,11 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
       } else if (k.startsWith("sms.templates.")) {
         const [, , i, field] = k.split(".");
         smsTemplates[Number(i)] = { ...(smsTemplates[Number(i)] ?? { label: "", body: "" }), [field]: raw.trim() };
+      } else if (k === "emailReminders.signature") {
+        next.emailReminders.signature = raw.trim();
+      } else if (k.startsWith("emailReminders.templates.")) {
+        const [, , i, field] = k.split(".");
+        emailTemplates[Number(i)] = { ...(emailTemplates[Number(i)] ?? { label: "", subject: "", body: "" }), [field]: raw.trim() };
       } else if (k === "setmore.excludeContacts") {
         next.setmore.excludeContacts = parseContactList(raw);
       } else if (raw.trim() !== "") {
@@ -58,6 +64,8 @@ export async function saveSettingsAction(_: R | null, fd: FormData): Promise<R> 
     }
     const filled = smsTemplates.filter((t) => t && t.body);
     if (filled.length) next.sms.templates = filled.map((t, i) => ({ label: t.label || `Template ${i + 1}`, body: t.body }));
+    const mails = emailTemplates.filter((t) => t && t.body);
+    if (mails.length) next.emailReminders.templates = mails.map((t, i) => ({ label: t.label || `Email ${i + 1}`, subject: t.subject || "Your event", body: t.body }));
     const parsed = settingsSchema.parse(next);
     const ctx = ctxFor(session);
     await withCtx(ctx, (tx) =>

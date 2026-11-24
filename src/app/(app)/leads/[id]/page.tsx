@@ -14,9 +14,9 @@ import { Timeline } from "./timeline";
 import { EditDetails } from "./edit-details";
 import { CompleteFollowUpButton, DismissDuplicateButton, MarkSeen } from "./small-actions";
 import { PlannerButton, RestoreLeadButton } from "../planner-actions";
-import { SmsOptOutToggle, TextComposer } from "../text-composer";
-import { lastTexts } from "@/server/sms";
-import { smsEligibility, textable } from "@/lib/sms";
+import { EmailOptOutToggle, ReminderComposer, SmsOptOutToggle } from "../text-composer";
+import { lastReminders, emailRemindersConfigured } from "@/server/email-reminders";
+import { emailEligibility, smsEligibility, textable } from "@/lib/sms";
 import { MessageSquareText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const data = await withPage(async (tx) => {
     const detail = await getLeadDetail(tx, id);
     if (!detail) return { detail: null, timeline: [], users: [], lastText: null };
-    const [timeline, users, texts] = await Promise.all([getTimeline(tx, id, tl), listUsers(tx), lastTexts(tx, [id])]);
+    const [timeline, users, texts] = await Promise.all([getTimeline(tx, id, tl), listUsers(tx), lastReminders(tx, [id])]);
     return { detail, timeline, users, lastText: texts.get(id) ?? null };
   });
   if (!data.detail) notFound();
@@ -41,6 +41,9 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const suggested = suggestNextFollowUp(lead.status, page.now, page.settings.followUps);
   const isOwner = can(page.session, "settings:manage");
   const sms = textable(detail.lead.phoneE164) ? smsEligibility(detail.lead, page.now, { ...page.settings.sms, minDaysBetween: 0 }, lastText) : ({ ok: false, reason: "No Canadian/US mobile number" } as const);
+  const mail = emailRemindersConfigured()
+    ? emailEligibility({ ...detail.lead, email: detail.lead.emailNormalized }, page.now, { ...page.settings.sms, minDaysBetween: 0 }, lastText)
+    : ({ ok: false, reason: "The info@ mailbox isn't connected" } as const);
   const archiveEvent = lead.archivedAt ? [...timeline].sort((a, b) => b.e.seq - a.e.seq).find((t) => t.e.field === "archivedAt" && t.e.newValue)?.e : null;
   const archiveVia = (archiveEvent?.payload as { via?: string; entry?: string } | null) ?? null;
   const archiveWhy = !archiveEvent ? null : archiveVia?.via === "planner" ? `marked as a planner/partner (${archiveVia.entry})` : "import undone";
@@ -113,22 +116,32 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
             quoteValue={lead.quoteValue}
           />
         )}
-        {!readOnly && lead.phoneE164 && (
+        {!readOnly && (lead.phoneE164 || lead.email) && (
           <details className="card mt-4 max-w-2xl p-4 [&[open]>summary]:mb-3">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-medium"><MessageSquareText size={15} strokeWidth={1.75} className="text-muted" aria-hidden /> Text reminder</span>
-              <span className="text-xs text-muted">{lastText ? `Last texted ${fmtRelative(lastText, page.now)}` : "Never texted"}{!sms.ok ? ` · ${sms.reason}` : ""}</span>
+              <span className="flex items-center gap-2 text-sm font-medium"><MessageSquareText size={15} strokeWidth={1.75} className="text-muted" aria-hidden /> Reminder</span>
+              <span className="text-xs text-muted">{lastText ? `Last reminded ${fmtRelative(lastText, page.now)}` : "No reminder yet"}</span>
             </summary>
-            {sms.ok ? (
-              <TextComposer
-                lead={{ id: lead.id, firstName: lead.firstName, phoneE164: lead.phoneE164, status: lead.status, eventType: lead.eventType, eventDate: lead.eventDate, venueName: lead.venueName }}
-                templates={page.settings.sms.templates}
-                senderName={page.settings.sms.senderName}
+            {sms.ok || mail.ok ? (
+              <ReminderComposer
+                canText={sms.ok}
+                canEmail={mail.ok}
+                textLead={sms.ok && lead.phoneE164 ? { id: lead.id, firstName: lead.firstName, phoneE164: lead.phoneE164, status: lead.status, eventType: lead.eventType, eventDate: lead.eventDate, venueName: lead.venueName } : null}
+                emailLead={mail.ok && lead.emailNormalized ? { id: lead.id, email: lead.emailNormalized, firstName: lead.firstName, eventType: lead.eventType, eventDate: lead.eventDate, venueName: lead.venueName } : null}
+                sms={{ templates: page.settings.sms.templates, senderName: page.settings.sms.senderName }}
+                email={{ templates: page.settings.emailReminders.templates, signature: page.settings.emailReminders.signature }}
               />
-            ) : (
-              <p className="text-sm text-muted">Can&apos;t text: {sms.reason.toLowerCase()}.</p>
+            ) : null}
+            {(!sms.ok || !mail.ok) && (
+              <p className="mt-2 text-xs text-muted">
+                {!sms.ok && <>Text: {sms.reason.toLowerCase()}. </>}
+                {!mail.ok && <>Email: {mail.reason.toLowerCase()}.</>}
+              </p>
             )}
-            <div className="mt-3 border-t border-edge pt-3"><SmsOptOutToggle leadId={lead.id} optedOut={!!lead.smsOptOutAt} /></div>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-edge pt-3">
+              {lead.phoneE164 && <SmsOptOutToggle leadId={lead.id} optedOut={!!lead.smsOptOutAt} />}
+              {lead.email && <EmailOptOutToggle leadId={lead.id} optedOut={!!lead.emailOptOutAt} />}
+            </div>
           </details>
         )}
       </header>

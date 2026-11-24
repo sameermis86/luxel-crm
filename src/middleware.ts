@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // /api/cron authenticates itself with CRON_SECRET; /api/intake with the Wix secret
-const PUBLIC = ["/login", "/api/intake", "/api/inngest", "/api/auth", "/api/cron", "/_next", "/favicon"];
+const PUBLIC = ["/login", "/unsubscribe", "/api/intake", "/api/inngest", "/api/auth", "/api/cron", "/_next", "/favicon"];
 
 /**
  * Cheap gate: bounce to /login when there's obviously no session. The real

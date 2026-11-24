@@ -52,3 +52,32 @@ export const smsHref = (phoneE164: string, text: string) => `sms:${phoneE164}?&b
 
 /** Is this a mobile-looking Canadian/US number? (We can't know for sure: landlines just won't receive.) */
 export const textable = (phoneE164: string | null) => !!phoneE164 && /^\+1\d{10}$/.test(phoneE164);
+
+/* ----------------------------- email reminders ----------------------------- */
+
+export interface EmailLead extends Omit<SmsLead, "phoneE164" | "smsOptOutAt"> { email: string | null; emailOptOutAt: Date | null }
+
+/** Same rules as texts (CASL consent window, opt-out, open lead, spacing), for the email address. */
+export function emailEligibility(l: EmailLead, now: Date, s: Pick<SmsSettings, "consentDays" | "minDaysBetween">, lastReminderAt: Date | null): { ok: true } | { ok: false; reason: string } {
+  if (!l.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(l.email)) return { ok: false, reason: "No email address" };
+  if (l.emailOptOutAt) return { ok: false, reason: "Unsubscribed from emails" };
+  return smsEligibility({ ...l, phoneE164: "+10000000000", smsOptOutAt: null }, now, { ...s, senderName: "", templates: [] }, lastReminderAt);
+}
+
+/** Fill an email template: subject + plain-text body with the sign-off and the unsubscribe line. */
+export function renderEmail(t: { subject: string; body: string }, l: Omit<SmsLead, "phoneE164" | "smsOptOutAt" | "createdAt" | "status">, o: { senderName: string; signature: string; unsubscribeUrl: string }) {
+  const fill = (x: string) => {
+    const date = l.eventDate ? " on " + new Date(l.eventDate + "T12:00:00Z").toLocaleDateString("en-CA", { month: "long", day: "numeric", timeZone: "UTC" }) : "";
+    return x
+      .replace(/\{first_name\}/g, l.firstName?.trim() || "there")
+      .replace(/\{sender\}/g, o.senderName)
+      .replace(/\{event\}/g, EVENT_WORD[l.eventType] ?? "event")
+      .replace(/\{event_date\}/g, date)
+      .replace(/\{venue\}/g, l.venueName ? ` at ${l.venueName}` : "");
+  };
+  return { subject: fill(t.subject).replace(/\s+/g, " ").trim(), body: fill(t.body).trim() };
+}
+
+/** What goes after the body in every reminder email (not editable per message). */
+export const emailFooter = (o: { senderName: string; signature: string; unsubscribeUrl: string }) =>
+  `\n\n${o.senderName}\n${o.signature}\n\nDon't want these emails? Unsubscribe: ${o.unsubscribeUrl}`;

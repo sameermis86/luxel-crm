@@ -80,6 +80,18 @@ function DEFAULT_SMS() {
   };
 }
 
+function DEFAULT_EMAIL_REMINDERS() {
+  return {
+    signature: "Luxel Decor & Flowers\nVaughan, Ontario · luxeldecor.com · info@luxeldecor.com",
+    templates: [
+      { label: "Check in", subject: "Your {event}{event_date}", body: "Hi {first_name},\n\nJust checking in on your {event}{event_date}{venue}. Is there anything we can help with, or any questions about our decor and florals?\n\nWe'd love to help bring your ideas to life." },
+      { label: "Quote follow-up", subject: "Your quote from Luxel Decor", body: "Hi {first_name},\n\nDid you get a chance to look at the quote for your {event}{event_date}? We're happy to walk you through it, adjust anything, or put together a few options.\n\nJust reply to this email and we'll take it from there." },
+      { label: "Book a consultation", subject: "Ideas for your {event}", body: "Hi {first_name},\n\nWe'd love to show you ideas for your {event}{venue}. Would a quick call or a visit to our Vaughan studio work for you this week or next?\n\nReply with a time that suits you and we'll confirm." },
+      { label: "Last check", subject: "Closing your file for now", body: "Hi {first_name},\n\nWe haven't heard back, so we'll close your file for now. If your {event} plans are still on, just reply and we'll pick it right back up.\n\nWishing you all the best." },
+    ],
+  };
+}
+
 export const smsTemplateSchema = z.object({ label: z.string().trim().min(1).max(60), body: z.string().trim().min(1).max(640) });
 export const smsSchema = z.object({
   /** who the text says it's from (CASL: identify the sender), e.g. "Mansi from Luxel Decor" */
@@ -92,9 +104,18 @@ export const smsSchema = z.object({
   templates: z.array(smsTemplateSchema).min(1),
 });
 
+export const emailTemplateSchema = z.object({ label: z.string().trim().min(1).max(60), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) });
+export const emailRemindersSchema = z.object({
+  /** sign-off under every reminder email (CASL: who it's from and how to reach you) */
+  signature: z.string().trim().min(1).max(500),
+  /** placeholders as for texts: {first_name} {event} {event_date} {venue} {sender}. An unsubscribe link is always added */
+  templates: z.array(emailTemplateSchema).min(1),
+});
+
 export const settingsSchema = z.object({
   businessHours: businessHoursSchema,
   sms: smsSchema.default(DEFAULT_SMS()),
+  emailReminders: emailRemindersSchema.default(DEFAULT_EMAIL_REMINDERS()),
   mailbox: mailboxSchema.default({ backfillDays: 700, batchSize: 1500, followUpGraceHours: 12 }),
   setmore: setmoreSchema.default({ proposalServices: ["existing booking", "quote review"], excludeContacts: [] }),
   ops: opsSchema.default({ setupSteps: [], teardownSteps: [], keepDaysAfter: 14 }),
@@ -120,6 +141,7 @@ export const DEFAULT_SERVICE_AREA = [
 
 export const DEFAULT_SETTINGS: Settings = {
   sms: DEFAULT_SMS(),
+  emailReminders: DEFAULT_EMAIL_REMINDERS(),
   mailbox: { backfillDays: 700, batchSize: 1500, followUpGraceHours: 12 },
   setmore: { proposalServices: ["existing booking", "quote review"], excludeContacts: [] },
 

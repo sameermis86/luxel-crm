@@ -501,7 +501,7 @@ export async function logTextAction(leadId: string, body: string): Promise<Actio
   });
   if (res.ok) {
     revalidatePath(`/leads/${leadId}`);
-    revalidatePath("/texts");
+    revalidatePath("/reminders");
     revalidatePath("/follow-ups");
   }
   return res.ok ? { ok: true, message: "Text logged" } : res;
@@ -518,7 +518,52 @@ export async function setSmsOptOutAction(leadId: string, optOut: boolean): Promi
   });
   if (res.ok) {
     revalidatePath(`/leads/${leadId}`);
-    revalidatePath("/texts");
+    revalidatePath("/reminders");
   }
   return res.ok ? { ok: true, message: optOut ? "Won't be texted again" : "Texts allowed again" } : res;
+}
+
+/* ----------------------------- reminder emails (reviewed, sent by a person) ---------------------------- */
+
+/** Send the reviewed email from info@ to the lead, save a copy in Sent, log it. Never automatic. */
+export async function sendReminderEmailAction(leadId: string, subject: string, body: string): Promise<ActionResult> {
+  const session = await requireSession();
+  let savedToSent = true;
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const v = z
+      .object({ leadId: z.string().uuid(), subject: z.string().trim().min(1, "Add a subject").max(200), body: z.string().trim().min(1, "The email is empty").max(5000) })
+      .parse({ leadId, subject, body });
+    const { emailRemindersConfigured, sendReminderEmail, smtpTransport } = await import("@/server/email-reminders");
+    if (!emailRemindersConfigured()) throw new LeadError("The info@ mailbox isn't connected (Vercel: MAILBOX_IMAP_USER / MAILBOX_IMAP_PASSWORD)");
+    try {
+      savedToSent = (await sendReminderEmail(ctxFor(session), v, await smtpTransport())).savedToSent;
+    } catch (e) {
+      if (e instanceof LeadError) throw e;
+      console.error("[reminder email] send failed", e);
+      throw new LeadError(`Couldn't send: ${(e as Error).message}`);
+    }
+  });
+  if (res.ok) {
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/reminders");
+    revalidatePath("/follow-ups");
+  }
+  return res.ok ? { ok: true, message: savedToSent ? "Email sent" : "Email sent (couldn't save a copy in Sent)" } : res;
+}
+
+/** Unsubscribed by hand (they asked by phone or reply). Reversible only if they ask to hear from us again. */
+export async function setEmailOptOutAction(leadId: string, optOut: boolean): Promise<ActionResult> {
+  const session = await requireSession();
+  const res = await run(async () => {
+    authorize(session, "leads:write");
+    const id = z.string().uuid().parse(leadId);
+    const ctx = ctxFor(session);
+    await withCtx(ctx, (tx) => updateLead(tx, ctx, id, { emailOptOutAt: optOut ? new Date() : null }));
+  });
+  if (res.ok) {
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/reminders");
+  }
+  return res.ok ? { ok: true, message: optOut ? "Won't be emailed again" : "Emails allowed again" } : res;
 }
