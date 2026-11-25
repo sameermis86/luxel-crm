@@ -2,12 +2,12 @@
 
 export const FINANCE_FIELDS = {
   project: { label: "Project number", required: true, guess: [/^project\s*(#|no\.?|number|id)?$/i, /^(order|quote|booking)\s*(#|no\.?|number|id)$/i, /^id$/i] },
-  total: { label: "Contract total", required: true, guess: [/^(grand\s*)?total(\s*\(.*\))?$/i, /contract\s*(total|value|amount)/i, /^(project|order)\s*total$/i, /^amount$/i] },
+  total: { label: "Contract total", required: true, guess: [/contract\s*(total|value|amount)/i, /^(grand\s*)?total(\s*\(.*\))?$/i, /^(project|order)\s*total$/i, /^amount$/i] },
   paid: { label: "Paid", required: false, guess: [/^(amount\s*)?paid$/i, /^payments?(\s*received)?$/i, /total\s*paid/i] },
-  balance: { label: "Balance due", required: false, guess: [/balance(\s*due)?/i, /amount\s*due/i, /outstanding/i] },
+  balance: { label: "Balance due (amount due)", required: false, guess: [/balance(\s*due)?/i, /amount\s*due/i, /outstanding/i] },
   client: { label: "Client", required: false, guess: [/^client(\s*name)?$/i, /^customer(\s*name)?$/i, /^contact$/i] },
   name: { label: "Project name", required: false, guess: [/^(project|event)\s*name$/i, /^name$/i, /^title$/i] },
-  eventDate: { label: "Event date", required: false, guess: [/^event\s*date$/i, /^(start|delivery|event)\s*(date)?$/i, /^date$/i] },
+  eventDate: { label: "Event date", required: false, guess: [/^event\s*(start\s*)?date$/i, /^(start|delivery|event)\s*(date)?$/i, /^date$/i] },
   status: { label: "Status", required: false, guess: [/^status$/i, /^stage$/i] },
 } as const;
 export type FinanceField = keyof typeof FINANCE_FIELDS;
@@ -58,16 +58,26 @@ export function parseDate(v: string | null | undefined): string | null {
 
 export interface FinanceRow { project: string; total: number; paid: number | null; balance: number | null; client: string | null; name: string | null; eventDate: string | null; status: string | null }
 
-export function mapFinanceRow(raw: Record<string, string>, mapping: FinanceMapping): { ok: true; row: FinanceRow } | { ok: false; error: string } {
+/** Goodshuffle statuses that aren't signed contracts. ("Contract Signed" and "Unsigned Changes" are.) */
+const NOT_CONTRACT = /^(lost|quote sent|new project|cancel+ed|declined|expired|draft)$/i;
+
+export function mapFinanceRow(raw: Record<string, string>, mapping: FinanceMapping): { ok: true; row: FinanceRow } | { ok: false; error: string; notContract?: boolean } {
   const get = (f: FinanceField) => (mapping[f] ? (raw[mapping[f]!] ?? "").trim() : "");
   const project = get("project").replace(/^#/, "").trim();
   if (!project) return { ok: false, error: "No project number" };
+  const status = get("status") || null;
+  // only signed contracts belong in Finance: Goodshuffle's project list also has quotes and lost projects
+  if (status && NOT_CONTRACT.test(status)) return { ok: false, error: `Project ${project}: ${status} (not a signed contract)`, notContract: true };
   const total = parseMoney(get("total"));
-  if (total == null) return { ok: false, error: `Project ${project}: no contract total` };
-  const paid = parseMoney(get("paid"));
-  const balance = parseMoney(get("balance")) ?? (paid != null ? Math.round((total - paid) * 100) / 100 : null);
+  if (total == null || total <= 0) return { ok: false, error: `Project ${project}: no contract total (not signed)`, notContract: true };
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const paidIn = parseMoney(get("paid"));
+  const balanceIn = parseMoney(get("balance"));
+  // Goodshuffle's project list has "Amount Due" but no "Paid": paid = total - amount due
+  const paid = paidIn ?? (balanceIn != null ? round(total - balanceIn) : null);
+  const balance = balanceIn ?? (paidIn != null ? round(total - paidIn) : null);
   return {
     ok: true,
-    row: { project, total, paid, balance, client: get("client") || null, name: get("name") || null, eventDate: parseDate(get("eventDate")), status: get("status") || null },
+    row: { project, total, paid, balance, client: get("client") || null, name: get("name") || null, eventDate: parseDate(get("eventDate")), status },
   };
 }

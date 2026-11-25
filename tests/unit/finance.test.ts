@@ -28,3 +28,19 @@ describe("finance import parsing", () => {
     expect(mapFinanceRow({ "Project #": "", "Grand Total": "1" }, m)).toEqual({ ok: false, error: "No project number" });
   });
 });
+
+describe("Goodshuffle project list export", () => {
+  const headers = ["Project ID", "Status", "Project Name", "Client Name", "Internal Contract Notes", "Quote Total", "Event Start Date", "Event Start Time", "Venue", "Contract Total", "Amount Due"];
+  const m = guessMapping(headers);
+  it("maps its columns (contract total, not quote total; amount due as balance)", () => {
+    expect(m).toMatchObject({ project: "Project ID", status: "Status", name: "Project Name", client: "Client Name", eventDate: "Event Start Date", total: "Contract Total", balance: "Amount Due" });
+    expect(m.paid).toBeUndefined();
+  });
+  it("keeps signed contracts (paid = total - amount due) and leaves out quotes and lost projects", () => {
+    const row = (status: string, contract: string, due: string) => ({ "Project ID": "123456789", Status: status, "Contract Total": contract, "Amount Due": due, "Quote Total": "$9,999.00 CAD ", "Event Start Date": "06/12/2027" });
+    expect(mapFinanceRow(row("Contract Signed", "$9,040.00 CAD ", "$1,000.00 CAD "), m)).toMatchObject({ ok: true, row: { total: 9040, paid: 8040, balance: 1000, eventDate: "2027-06-12" } });
+    expect(mapFinanceRow(row("Unsigned Changes", "$500.00 CAD", "$0.00 CAD"), m).ok).toBe(true);
+    expect(mapFinanceRow(row("Lost", "$316.50 CAD", "$0.00 CAD"), m)).toMatchObject({ ok: false, notContract: true });
+    expect(mapFinanceRow(row("Quote Sent", "$0.00 CAD", "$0.00 CAD"), m)).toMatchObject({ ok: false, notContract: true });
+  });
+});

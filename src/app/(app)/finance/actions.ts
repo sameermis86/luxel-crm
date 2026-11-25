@@ -24,15 +24,21 @@ export async function importFinanceAction(input: z.input<typeof schema>): Promis
     if (!v.mapping.project || !v.mapping.total) return { ok: false, error: "Choose the columns for project number and contract total" };
     const rows: FinanceRow[] = [];
     const errors: string[] = [];
+    let notContracts = 0;
     v.rows.forEach((raw, i) => {
       const r = mapFinanceRow(raw, v.mapping);
       if (r.ok) rows.push(r.row);
+      else if (r.notContract) notContracts++;
       else errors.push(`Row ${i + 2}: ${r.error}`);
     });
     if (!rows.length) return { ok: false, error: errors[0] ?? "No rows to import" };
-    const out = await importContracts(ctxFor(session), { rows, skipped: errors.length, filename: v.filename, mapping: v.mapping });
+    const out = await importContracts(ctxFor(session), { rows, skipped: errors.length + notContracts, filename: v.filename, mapping: v.mapping });
     revalidatePath("/finance");
-    return { ok: true, message: `Imported: ${out.created} new, ${out.updated} updated${out.skipped ? `, ${out.skipped} skipped` : ""}; ${out.linked} matched to leads`, data: { ...out, errors: errors.slice(0, 20) } };
+    return {
+      ok: true,
+      message: `Imported ${rows.length} signed contract${rows.length === 1 ? "" : "s"}: ${out.created} new, ${out.updated} updated; ${out.linked} matched to leads${notContracts ? `. Left out ${notContracts} quote/lost project${notContracts === 1 ? "" : "s"}` : ""}${errors.length ? `, ${errors.length} unreadable row(s)` : ""}`,
+      data: { ...out, errors: errors.slice(0, 20) },
+    };
   } catch (e) {
     if (e instanceof ForbiddenError) return { ok: false, error: e.message };
     if (e instanceof z.ZodError) return { ok: false, error: "That file couldn't be read (too large or unexpected format)" };

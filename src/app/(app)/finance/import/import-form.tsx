@@ -17,23 +17,34 @@ export function FinanceImportForm() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string; errors?: string[] } | null>(null);
   const [pending, start] = useTransition();
 
-  const onFile = (f: File | undefined) => {
+  const onFile = async (f: File | undefined) => {
     setMsg(null);
     if (!f) return;
-    Papa.parse<Record<string, string>>(f, {
+    // Goodshuffle exports Windows-1252 (e.g. non-breaking spaces in amounts); read as UTF-8 only if it is
+    const buf = await f.arrayBuffer();
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch {
+      text = new TextDecoder("windows-1252").decode(buf);
+    }
+    Papa.parse<Record<string, string>>(text, {
       header: true,
       skipEmptyLines: "greedy",
       complete: (res) => {
         const headers = (res.meta.fields ?? []).filter(Boolean);
         if (!headers.length || !res.data.length) return setMsg({ ok: false, text: "That file has no rows. Export it from Goodshuffle as CSV." });
-        setFile({ name: f.name, headers, rows: res.data.slice(0, 5000) });
+        setFile({ name: f.name, headers, rows: (res.data as Record<string, string>[]).slice(0, 5000) });
         setMapping(guessMapping(headers));
       },
       error: () => setMsg({ ok: false, text: "Couldn't read that file. Export it from Goodshuffle as CSV." }),
     });
   };
-  const preview = file ? file.rows.slice(0, 6).map((r) => mapFinanceRow(r, mapping)) : [];
-  const valid = file ? file.rows.filter((r) => mapFinanceRow(r, mapping).ok).length : 0;
+  const preview = file ? file.rows.map((r) => mapFinanceRow(r, mapping)).filter((r) => r.ok || !r.notContract).slice(0, 6) : [];
+  const mapped = file ? file.rows.map((r) => mapFinanceRow(r, mapping)) : [];
+  const valid = mapped.filter((r) => r.ok).length;
+  const notContracts = mapped.filter((r) => !r.ok && r.notContract).length;
+  const unreadable = mapped.length - valid - notContracts;
 
   return (
     <div className="space-y-4">
@@ -84,7 +95,10 @@ export function FinanceImportForm() {
             >
               {pending ? "Importing…" : `Import ${valid} contract${valid === 1 ? "" : "s"}`}
             </button>
-            <span className="text-sm text-muted">{file.rows.length - valid > 0 ? `${file.rows.length - valid} row(s) will be skipped` : "All rows look good"}</span>
+            <span className="text-sm text-muted">
+              {notContracts > 0 && `${notContracts} quote/lost project${notContracts === 1 ? "" : "s"} left out (not signed contracts). `}
+              {unreadable > 0 ? `${unreadable} row(s) can't be read and will be skipped.` : notContracts ? "" : "All rows look good."}
+            </span>
           </div>
         </section>
       )}
