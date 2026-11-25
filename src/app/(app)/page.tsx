@@ -25,7 +25,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
     const df = parseDashFilter(sp, p.now, tz);
     const [d, users] = await Promise.all([computeDashboard(tx, df, p.wc), listUsers(tx)]);
     return { df, d, users, now: p.now, tz };
-  });
+  }, "sales:view");
 
   const one = (v?: string[]) => (v?.length === 1 ? v[0] : "");
   const rangeLabel = df.range && df.range !== "custom" ? RANGE_LABELS[df.range as keyof typeof RANGE_LABELS] : `${fmtDate(df.from)} – ${fmtDate(df.to)}`;

@@ -20,7 +20,7 @@ export default async function OpsBoard({ searchParams }: { searchParams: SP }) {
     const [from, to] =
       view === "recent" ? [addDaysToDate(today, -p.settings.ops.keepDaysAfter), addDaysToDate(today, -1)] : [today, addDaysToDate(today, view === "week" ? 6 : view === "all" ? 3650 : 59)];
     return { events: await listOpsEvents(tx, from, to), today };
-  });
+  }, "ops:view");
   const connected = (["signed", "action_needed"] as const).some((s) => configuredCalendars()[s]);
 
   return (

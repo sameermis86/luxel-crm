@@ -16,8 +16,19 @@ async function devLogin(formData: FormData) {
   redirect("/");
 }
 
-export default async function LoginPage() {
-  if (await getSession()) redirect("/");
+const REASONS: Record<string, string> = {
+  expired: "You were signed out after a while without activity. Sign in again.",
+  revoked: "Your session was ended (a password change or \"sign out everywhere\"). Sign in again.",
+  signed_out_everywhere: "You've been signed out on every device.",
+  signin: "Please sign in.",
+  link: "That link has expired or was already used. Ask for a new one.",
+  not_member: "This email isn't set up for the Luxel app. Ask an owner to add you.",
+};
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
+  const s = await getSession();
+  if (s && !s.revoked) redirect(s.mfa === "needs_verify" ? "/login/verify" : "/");
+  const reason = REASONS[(await searchParams).reason ?? ""];
   const mode = authMode();
   const users = mode === "dev" ? await listDevUsers() : [];
   return (
@@ -51,6 +62,7 @@ export default async function LoginPage() {
           <div className="mb-10 lg:hidden"><Logo /></div>
           <h2 className="text-[30px]">Welcome back</h2>
           <p className="mt-2 text-[15px] text-muted">Sign in to the studio back office.</p>
+          {reason && <p className="mt-4 rounded-lg border border-amber/30 bg-amber-soft px-3 py-2 text-sm text-ink/80" role="status">{reason}</p>}
           {mode === "dev" ? (
             <form action={devLogin} className="mt-8 space-y-2.5">
               <p className="mb-3 text-sm text-muted">Local development: choose who you are.</p>

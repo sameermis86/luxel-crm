@@ -65,7 +65,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: SP }) 
       isOwner,
     };
     return { rows, total, users, views, consult };
-  });
+  }, "sales:view");
   const { rows, total, users, views, consult, page } = data;
   const query = filterToParams(filter).toString();
   const pages = Math.max(1, Math.ceil(total / params.per));

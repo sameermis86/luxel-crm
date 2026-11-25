@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import Papa from "papaparse";
 import { withCtx } from "@/db/client";
-import { getSession, ctxFor } from "@/server/auth";
+import { getSession, ctxFor, can } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { allMatchingLeads } from "@/server/leads/queries";
 import { parseLeadFilter } from "@/lib/lead-filters";
@@ -11,6 +11,7 @@ import { dateInTz } from "@/lib/dates";
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!can(session, "sales:view")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const filter = parseLeadFilter(req.nextUrl.searchParams);
   const now = new Date();
   const rows = await withCtx(ctxFor(session), async (tx) => {

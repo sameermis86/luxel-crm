@@ -15,7 +15,7 @@ export const metadata = { title: "Reminders" };
  * email (sent from info@ after review). Nothing is sent without someone clicking.
  */
 export default async function RemindersPage() {
-  const { rows, skipped, page } = await withPage(async (tx, p) => reminderQueue(tx, p.now, p.settings));
+  const { rows, skipped, page } = await withPage(async (tx, p) => reminderQueue(tx, p.now, p.settings), "sales:view");
   const s = page.settings;
   const emailOn = emailRemindersConfigured();
   const skippedList = Object.entries(skipped).sort((a, b) => b[1] - a[1]);

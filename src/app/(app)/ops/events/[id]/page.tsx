@@ -15,7 +15,7 @@ export default async function OpsEventPage({ params, searchParams }: { params: P
   const { id } = await params;
   const sp = await searchParams;
   const tab: Tab = sp.tab && sp.tab in TABS ? (sp.tab as Tab) : "pull";
-  const data = await withPage((tx) => getOpsEvent(tx, id));
+  const data = await withPage((tx) => getOpsEvent(tx, id), "ops:view");
   if (!data) notFound();
   const { event: e, items, tasks, names } = data;
   const live = items.filter((i) => !i.removedAt);

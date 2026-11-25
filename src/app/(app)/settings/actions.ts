@@ -94,45 +94,6 @@ export async function resetSettingsAction(): Promise<R> {
   }
 }
 
-/* ----------------------------- users -------------------------------------- */
-
-export async function saveUserAction(_: R | null, fd: FormData): Promise<R> {
-  const session = await requireSession();
-  try {
-    authorize(session, "users:manage");
-    const input = z
-      .object({
-        id: z.string().uuid().optional(),
-        name: z.string().trim().min(1).max(120),
-        email: z.string().trim().toLowerCase().email(),
-        role: z.enum(ROLES),
-        active: z.boolean(),
-        acceptsLeads: z.boolean(),
-      })
-      .parse({
-        id: fd.get("id") || undefined,
-        name: fd.get("name"),
-        email: fd.get("email"),
-        role: fd.get("role"),
-        active: fd.get("active") === "on",
-        acceptsLeads: fd.get("acceptsLeads") === "on",
-      });
-    if (input.id === session.userId && (input.role !== "owner" || !input.active)) {
-      return { ok: false, error: "You can't remove your own owner access" };
-    }
-    const ctx = ctxFor(session);
-    await withCtx(ctx, async (tx) => {
-      const { id, ...vals } = input;
-      if (id) await tx.update(users).set(vals).where(eq(users.id, id));
-      else await tx.insert(users).values({ ...vals, orgId: ctx.orgId });
-    });
-    revalidatePath("/settings");
-    return { ok: true, message: input.id ? "User updated" : "User added. In Supabase mode, invite them from Supabase Auth with the same email." };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
 /* ----------------------------- assignment rules --------------------------- */
 
 const ruleSchema = z.object({

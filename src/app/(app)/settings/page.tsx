@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { asc } from "drizzle-orm";
 import { assignmentRules, users, EVENT_TYPES, SOURCES, ROLES } from "@/db/schema";
@@ -6,7 +7,7 @@ import { can } from "@/server/auth";
 import { titleCase } from "@/lib/format";
 import type { AssignmentConditions } from "@/lib/assignment";
 import { ActionForm, ActionButton } from "@/components/action-form";
-import { saveSettingsAction, resetSettingsAction, saveUserAction, saveRuleAction, deleteRuleAction } from "./actions";
+import { saveSettingsAction, resetSettingsAction, saveRuleAction, deleteRuleAction } from "./actions";
 import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function SettingsPage() {
   const { people, rules, page } = await withPage(async (tx) => ({
     people: await tx.select().from(users).orderBy(asc(users.name)),
     rules: await tx.select().from(assignmentRules).orderBy(asc(assignmentRules.priority)),
-  }));
+  }), "settings:manage");
   if (!can(page.session, "settings:manage")) redirect("/");
   const s = page.settings;
   const N = ({ name, value, label, step = "1", w = "w-20" }: { name: string; value: number; label?: string; step?: string; w?: string }) => (
@@ -32,7 +33,7 @@ export default async function SettingsPage() {
       <PageHeader
         eyebrow="Owners only"
         title="Settings"
-        description="Business hours, follow-up timing, the team and how new leads are assigned."
+        description="Business hours, follow-ups, reminders, planners and how new leads are assigned. People and access are under Team & access."
         actions={<ActionButton action={resetSettingsAction} label="Reset to defaults" confirmText="Reset follow-up and business-hours settings to the defaults?" className="btn-ghost" />}
       />
 
@@ -132,27 +133,12 @@ export default async function SettingsPage() {
 
       </ActionForm>
 
-      {/* Users */}
-      <section className="card p-5">
-        <h2 className="text-[19px]">Users</h2>
-        <p className="text-xs text-muted">Owners: everything. Managers: all leads, no settings. Staff: their own leads plus unassigned ones (enforced in the database too).</p>
-        <div className="mt-3 space-y-2">
-          {[...people, null].map((u) => (
-            <ActionForm key={u?.id ?? "new"} action={saveUserAction} submitLabel={u ? "Save" : "Add user"} className="flex flex-wrap items-end gap-3 rounded-md border border-edge p-3 text-sm">
-              {u && <input type="hidden" name="id" value={u.id} />}
-              <label className="block"><span className="label">Name</span><input name="name" defaultValue={u?.name} required className="input w-40" /></label>
-              <label className="block"><span className="label">Email</span><input name="email" type="email" defaultValue={u?.email} required className="input w-64" /></label>
-              <label className="block">
-                <span className="label">Role</span>
-                <select name="role" defaultValue={u?.role ?? "staff"} className="input">
-                  {ROLES.map((r) => <option key={r} value={r}>{titleCase(r)}</option>)}
-                </select>
-              </label>
-              <label className="flex items-center gap-1 pb-2"><input type="checkbox" name="active" defaultChecked={u ? u.active : true} /> Active</label>
-              <label className="flex items-center gap-1 pb-2"><input type="checkbox" name="acceptsLeads" defaultChecked={u ? u.acceptsLeads : false} /> Receives new leads</label>
-            </ActionForm>
-          ))}
+      <section className="card flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h2 className="text-[19px]">Team &amp; access</h2>
+          <p className="text-sm text-muted">People, roles, module access, invites and password resets. Every change is in the audit log.</p>
         </div>
+        <span className="flex gap-2"><Link href="/settings/team" className="btn">Team &amp; access</Link><Link href="/settings/audit" className="btn-ghost">Audit log</Link></span>
       </section>
 
       {/* Assignment rules */}

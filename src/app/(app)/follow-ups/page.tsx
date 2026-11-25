@@ -18,7 +18,7 @@ export default async function FollowUpsPage() {
       none: await myLeadsWithoutFollowUp(tx, p.session.userId),
       unassigned: can(p.session, "leads:read_all") ? await newUnassignedLeads(tx) : [],
     };
-  });
+  }, "sales:view");
   const { overdue, today, upcoming, none, unassigned, page } = data;
 
   return (

@@ -125,6 +125,8 @@ export const users = pgTable(
     role: roleEnum("role").notNull().default("staff"),
     active: boolean("active").notNull().default(true),
     acceptsLeads: boolean("accepts_leads").notNull().default(false),
+    /** sessions that started before this are no longer valid ("sign out everywhere", password change) */
+    sessionsValidAfter: ts("sessions_valid_after"),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_org_email_uq").on(t.orgId, t.email)],
@@ -494,3 +496,41 @@ export type LeadEvent = typeof leadEvents.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type AssignmentRule = typeof assignmentRules.$inferSelect;
 export type FollowUp = typeof followUps.$inferSelect;
+
+/* ----------------------------- Access & security ----------------------------- */
+
+/** Modules of the app. Each user has a level per module (missing row = the role's default, see src/lib/access.ts). */
+export const MODULES = ["sales", "ops", "floral", "finance", "admin"] as const;
+export type Module = (typeof MODULES)[number];
+export const ACCESS_LEVELS = ["none", "view", "edit", "manage"] as const;
+export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+
+export const userAccess = pgTable(
+  "user_access",
+  {
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    module: text("module", { enum: MODULES }).notNull(),
+    level: text("level", { enum: ACCESS_LEVELS }).notNull(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    updatedBy: uuid("updated_by").references(() => users.id),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.module] })],
+);
+
+/** Security-relevant actions (sign-ins, password/2-step changes, access changes). Append-only. */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    at: ts("at").notNull().defaultNow(),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
+    action: text("action").notNull(), // e.g. auth.sign_in, auth.password_changed, access.changed
+    target: text("target"), // e.g. user:<id>
+    metadata: jsonb("metadata"),
+    ip: text("ip"),
+  },
+  (t) => [index("audit_log_org_at_idx").on(t.orgId, t.at)],
+);
+export type AuditEntry = typeof auditLog.$inferSelect;

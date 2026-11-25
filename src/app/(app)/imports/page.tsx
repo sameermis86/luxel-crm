@@ -28,7 +28,7 @@ export default async function ImportsPage() {
       .leftJoin(users, eq(users.id, importBatches.createdBy))
       .orderBy(desc(importBatches.createdAt))
       .limit(50),
-  }));
+  }), "imports:create");
   if (!can(page.session, "imports:create")) redirect("/leads");
   const canUndo = can(page.session, "imports:undo");
   const sync = await getSyncState(page.session.orgId);

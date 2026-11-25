@@ -17,3 +17,11 @@ export async function createSupabaseServer() {
     },
   });
 }
+
+/** Admin client (service role): invites and sign-out-everywhere. Server only; null when the key isn't set. */
+export async function supabaseAdmin() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key || !process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}

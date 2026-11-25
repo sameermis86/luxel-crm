@@ -31,7 +31,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
     if (!detail) return { detail: null, timeline: [], users: [], lastText: null };
     const [timeline, users, texts] = await Promise.all([getTimeline(tx, id, tl), listUsers(tx), lastReminders(tx, [id])]);
     return { detail, timeline, users, lastText: texts.get(id) ?? null };
-  });
+  }, "sales:view");
   if (!data.detail) notFound();
   const { detail, timeline, users, lastText, page } = data;
   const { lead, owner, mergedInto, mergedChildren, followUps, duplicates } = detail;

@@ -27,7 +27,7 @@ export default async function MergePage({ searchParams }: { searchParams: Promis
     const [la] = await tx.select().from(leads).where(eq(leads.id, a));
     const [lb] = await tx.select().from(leads).where(eq(leads.id, b));
     return { la, lb, people: await tx.select().from(users) };
-  });
+  }, "leads:merge");
   if (!can(data.page.session, "leads:merge")) redirect(`/leads/${a}`);
   const { la, lb, people } = data;
   if (!la || !lb) notFound();

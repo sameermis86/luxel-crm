@@ -5,19 +5,27 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine, Bell, CalendarCheck2, CalendarRange, ChevronsUpDown, Flower2, LayoutDashboard, LogOut, Menu, Plus,
-  Settings, Truck, Users, X, Handshake, type LucideIcon,
+  Settings, Truck, Users, X, Handshake, type LucideIcon, Landmark, ShieldCheck, UserCog, ScrollText, UserRound,
   MessageSquareText,
 } from "lucide-react";
 
-/** Luxel's divisions. The CRM is Sales & CRM; Fulfillment & Ops runs signed events; Floral orders is next. */
-const DIVISIONS: { key: "sales" | "ops" | "floral"; label: string; href: string | null; icon: LucideIcon }[] = [
+type DivisionKey = "sales" | "ops" | "floral" | "finance" | "admin";
+/** Luxel's modules. Each person sees only the ones they have access to (Team & access). */
+const DIVISIONS: { key: DivisionKey; label: string; href: string | null; icon: LucideIcon }[] = [
   { key: "sales", label: "Sales & CRM", href: "/", icon: Handshake },
   { key: "ops", label: "Fulfillment & Ops", href: "/ops", icon: Truck },
+  { key: "finance", label: "Finance", href: "/finance", icon: Landmark },
   { key: "floral", label: "Floral orders", href: null, icon: Flower2 },
+  { key: "admin", label: "Admin", href: "/settings", icon: ShieldCheck },
 ];
 
-export function divisionOf(path: string) {
-  return path === "/ops" || path.startsWith("/ops/") ? "ops" : "sales";
+const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
+export function divisionOf(path: string): DivisionKey | "account" {
+  if (under(path, "/ops")) return "ops";
+  if (under(path, "/finance")) return "finance";
+  if (under(path, "/settings") || under(path, "/admin")) return "admin";
+  if (under(path, "/account")) return "account";
+  return "sales";
 }
 
 interface Section { href: string; label: string; icon: LucideIcon; exact?: boolean; show?: boolean }
@@ -26,19 +34,28 @@ export interface ShellProps {
   user: { name: string; role: string };
   canImport: boolean;
   canSettings: boolean;
+  /** module levels (none | view | edit | manage) */
+  access: Record<string, string>;
   notes: { id: string; title: string; leadId: string | null }[];
   children: React.ReactNode;
 }
 
-function sectionsFor(division: string, p: Pick<ShellProps, "canImport" | "canSettings">): Section[] {
+function sectionsFor(division: string, p: Pick<ShellProps, "canImport" | "canSettings" | "access">): Section[] {
   if (division === "ops") return [{ href: "/ops", label: "Event board", icon: CalendarRange, exact: true }];
+  if (division === "finance") return [{ href: "/finance", label: "Overview", icon: Landmark, exact: true }];
+  if (division === "admin")
+    return [
+      { href: "/settings", label: "Settings", icon: Settings, exact: true },
+      { href: "/settings/team", label: "Team & access", icon: UserCog },
+      { href: "/settings/audit", label: "Audit log", icon: ScrollText },
+    ];
+  if (division === "account") return [{ href: "/account", label: "My account & security", icon: UserRound }];
   return [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/follow-ups", label: "My follow-ups", icon: CalendarCheck2 },
     { href: "/reminders", label: "Reminders", icon: MessageSquareText },
     { href: "/imports", label: "Import", icon: ArrowDownToLine, show: p.canImport },
-    { href: "/settings", label: "Settings", icon: Settings, show: p.canSettings },
   ].filter((s) => s.show !== false);
 }
 
@@ -68,7 +85,8 @@ function Initials({ name }: { name: string }) {
 function NavPanel(props: Omit<ShellProps, "children"> & { onNavigate?: () => void }) {
   const path = usePathname();
   const division = divisionOf(path);
-  const current = DIVISIONS.find((d) => d.key === division)!;
+  const allowed = DIVISIONS.filter((d) => d.key === "floral" || (props.access[d.key] ?? "none") !== "none");
+  const current = DIVISIONS.find((d) => d.key === division) ?? { key: "account" as const, label: "My account", href: "/account", icon: UserRound };
   const [switcher, setSwitcher] = useState(false);
   return (
     <div className="flex h-full flex-col">
@@ -93,7 +111,7 @@ function NavPanel(props: Omit<ShellProps, "children"> & { onNavigate?: () => voi
         </button>
         {switcher && (
           <ul className="absolute inset-x-3 top-full z-40 mt-1.5 rounded-[10px] border border-edge bg-card p-1 shadow-lg" role="menu">
-            {DIVISIONS.map((d) => (
+            {allowed.map((d) => (
               <li key={d.key} role="none">
                 {d.href ? (
                   <Link
@@ -119,7 +137,7 @@ function NavPanel(props: Omit<ShellProps, "children"> & { onNavigate?: () => voi
         )}
       </div>
 
-      {division === "sales" && (
+      {division === "sales" && ["edit", "manage"].includes(props.access.sales) && (
         <div className="px-3 pt-3">
           <Link href="/leads/new" onClick={props.onNavigate} className="btn-bloom w-full">
             <Plus size={16} strokeWidth={2} /> New lead
@@ -149,13 +167,13 @@ function NavPanel(props: Omit<ShellProps, "children"> & { onNavigate?: () => voi
       </nav>
 
       <div className="border-t border-edge p-3">
-        <Notifications notes={props.notes} onNavigate={props.onNavigate} />
+        {props.access.sales !== "none" && <Notifications notes={props.notes} onNavigate={props.onNavigate} />}
         <div className="mt-1 flex items-center gap-2.5 rounded-lg px-2 py-2">
           <Initials name={props.user.name} />
-          <div className="min-w-0 flex-1 leading-tight">
+          <Link href="/account" onClick={props.onNavigate} className="min-w-0 flex-1 leading-tight rounded-md hover:text-bloom-strong" title="My account & security">
             <p className="truncate text-sm font-medium">{props.user.name}</p>
-            <p className="truncate text-xs text-muted capitalize">{props.user.role}</p>
-          </div>
+            <p className="truncate text-xs text-muted capitalize">{props.user.role} · Account</p>
+          </Link>
           <form action="/api/auth/logout" method="post">
             <button className="btn-ghost h-8 w-8 px-0 text-muted" title="Sign out" aria-label="Sign out"><LogOut size={16} strokeWidth={1.75} /></button>
           </form>
@@ -221,7 +239,7 @@ export function Shell(props: ShellProps) {
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [drawer]);
-  const division = DIVISIONS.find((d) => d.key === divisionOf(path))!;
+  const division = DIVISIONS.find((d) => d.key === divisionOf(path)) ?? { key: "account" as const, label: "My account", href: "/account", icon: UserRound };
   const section = sectionsFor(division.key, props).find((s) => isActive(path, s));
 
   return (
@@ -241,7 +259,7 @@ export function Shell(props: ShellProps) {
         <Link href="/" aria-label="Luxel home"><Logo size={26} /></Link>
         <span className="truncate text-sm text-muted">/ {section?.label ?? division.label}</span>
         <span className="flex-1" />
-        {division.key === "sales" && (
+        {division.key === "sales" && ["edit", "manage"].includes(props.access.sales) && (
           <Link href="/leads/new" className="btn-bloom btn-sm" aria-label="New lead"><Plus size={14} strokeWidth={2.2} /><span className="hidden sm:inline">New lead</span></Link>
         )}
       </header>
@@ -265,9 +283,10 @@ export function Shell(props: ShellProps) {
         <footer className="mt-16 flex flex-col gap-2 border-t border-edge pt-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between print:hidden">
           <span className="inline-flex items-center gap-2"><Logo size={18} /><span className="text-faint">·</span> Decor &amp; Flowers, Vaughan, Ontario</span>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-4 gap-y-1">
-            <Link href="/" className="hover:text-ink">Sales &amp; CRM</Link>
-            <Link href="/ops" className="hover:text-ink">Fulfillment &amp; Ops</Link>
-            <Link href="/follow-ups" className="hover:text-ink">My follow-ups</Link>
+            {props.access.sales !== "none" && <Link href="/" className="hover:text-ink">Sales &amp; CRM</Link>}
+            {props.access.ops !== "none" && <Link href="/ops" className="hover:text-ink">Fulfillment &amp; Ops</Link>}
+            {props.access.finance !== "none" && <Link href="/finance" className="hover:text-ink">Finance</Link>}
+            <Link href="/account" className="hover:text-ink">My account</Link>
           </nav>
         </footer>
       </main>
