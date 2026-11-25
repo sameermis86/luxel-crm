@@ -54,14 +54,14 @@ export function FinanceImportForm() {
           <span className="label">Goodshuffle export (CSV)</span>
           <input type="file" accept=".csv,text/csv" className="input" onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
-        <p className="hint">One row per project, with the project number and the contract total (paid and balance if the report has them). Importing the same projects again updates them.</p>
+        <p className="hint">Goodshuffle&apos;s project list works as downloaded: only signed contracts are kept, with their contract total. Importing the same projects again updates them.</p>
       </section>
 
       {file && (
         <section className="card space-y-4 p-5">
           <h2 className="text-[17px]">Columns in {file.name}</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {(Object.keys(FINANCE_FIELDS) as FinanceField[]).map((f) => (
+            {(Object.keys(FINANCE_FIELDS) as FinanceField[]).filter((f) => f !== "paid" && f !== "balance").map((f) => (
               <label key={f} className="block">
                 <span className="label">{FINANCE_FIELDS[f].label}{FINANCE_FIELDS[f].required ? " *" : ""}</span>
                 <select className="input" value={mapping[f] ?? ""} onChange={(e) => setMapping((m) => ({ ...m, [f]: e.target.value || undefined }))}>
@@ -73,12 +73,12 @@ export function FinanceImportForm() {
           </div>
           <div className="overflow-x-auto rounded-[var(--radius-control)] border border-edge">
             <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-card-2"><tr><th className="th">Project</th><th className="th">Client</th><th className="th">Event</th><th className="th text-right">Total</th><th className="th text-right">Paid</th><th className="th text-right">Balance</th></tr></thead>
+              <thead className="bg-card-2"><tr><th className="th">Project</th><th className="th">Client</th><th className="th">Event</th><th className="th text-right">Revenue</th></tr></thead>
               <tbody className="divide-y divide-edge">
                 {preview.map((p, i) => p.ok ? (
-                  <tr key={i}><td className="td font-mono text-xs">{p.row.project}</td><td className="td">{p.row.client ?? "—"}</td><td className="td tabular">{p.row.eventDate ?? "—"}</td><td className="td text-right tabular">{money(p.row.total)}</td><td className="td text-right tabular">{money(p.row.paid)}</td><td className="td text-right tabular">{money(p.row.balance)}</td></tr>
+                  <tr key={i}><td className="td font-mono text-xs">{p.row.project}</td><td className="td">{p.row.client ?? "—"}</td><td className="td tabular">{p.row.eventDate ?? "—"}</td><td className="td text-right tabular">{money(p.row.total)}</td></tr>
                 ) : (
-                  <tr key={i}><td colSpan={6} className="td text-bloom">{p.error}</td></tr>
+                  <tr key={i}><td colSpan={4} className="td text-bloom">{p.error}</td></tr>
                 ))}
               </tbody>
             </table>

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withCtx, closeDb, type Ctx } from "@/db/client";
 import { financeContracts, auditLog } from "@/db/schema";
 import { createLead, updateLead } from "@/server/leads/service";
-import { importContracts, financeOverview } from "@/server/finance";
+import { importContracts, financeOverview, financeYears } from "@/server/finance";
 import { saveMember } from "@/server/team";
 import { freshOrg, addUser, rejectsWith } from "../helpers";
 
@@ -38,11 +38,13 @@ describe("finance", () => {
     expect(log.some((l) => (l.metadata as any)?.replacedPrevious === before.length)).toBe(true);
   });
 
-  it("sums a year by event date: booked, collected, still to collect, overdue", async () => {
+  it("sums revenue by event date, per year and everything still ahead", async () => {
     const o = await withCtx(owner, (tx) => financeOverview(tx, "2026-01-01", "2027-01-01", "2026-11-25"));
-    expect(o.kpis).toMatchObject({ contracts: 1, total: 5000, paid: 5000, balance: 0, overdue: 0 });
+    expect(o.kpis).toEqual({ contracts: 1, total: 5000 });
+    expect(o.ahead).toEqual({ contracts: 1, total: 9040 }); // the 2027 event
     const o2 = await withCtx(owner, (tx) => financeOverview(tx, "2027-01-01", "2028-01-01", "2026-11-25"));
-    expect(o2.byMonth).toEqual([{ month: "2027-06", contracts: 1, total: 9040, balance: 0 }]);
+    expect(o2.byMonth).toEqual([{ month: "2027-06", contracts: 1, total: 9040 }]);
+    expect(await withCtx(owner, (tx) => financeYears(tx))).toEqual([2026, 2027]);
   });
 
   it("is hidden from people without Finance access, read-only at view level (database-enforced)", async () => {

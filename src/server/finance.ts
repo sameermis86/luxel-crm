@@ -48,21 +48,27 @@ export async function importContracts(
 
 const sum = (col: unknown) => sql<number>`coalesce(sum(${col}), 0)::float`;
 
-/** Figures for contracts whose event falls in [from, to). */
+/** Years that have contracts (by event date), ascending. */
+export async function financeYears(tx: Tx): Promise<number[]> {
+  const rows = await tx
+    .select({ y: sql<number>`extract(year from ${financeContracts.eventDate})::int` })
+    .from(financeContracts)
+    .where(isNotNull(financeContracts.eventDate))
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
+  return rows.map((r) => r.y);
+}
+
+/** Revenue for contracts whose event falls in [from, to), plus everything still ahead of today. */
 export async function financeOverview(tx: Tx, from: string, to: string, today: string) {
   const inRange = and(isNotNull(financeContracts.eventDate), gte(financeContracts.eventDate, from), lt(financeContracts.eventDate, to));
-  const [k] = await tx
-    .select({
-      contracts: sql<number>`count(*)::int`,
-      total: sum(financeContracts.total),
-      paid: sum(financeContracts.paid),
-      balance: sum(sql`greatest(${financeContracts.balance}, 0)`),
-      overdue: sum(sql`case when ${financeContracts.eventDate} < ${today} then greatest(${financeContracts.balance}, 0) end`),
-    })
+  const [k] = await tx.select({ contracts: sql<number>`count(*)::int`, total: sum(financeContracts.total) }).from(financeContracts).where(inRange);
+  const [ahead] = await tx
+    .select({ contracts: sql<number>`count(*)::int`, total: sum(financeContracts.total) })
     .from(financeContracts)
-    .where(inRange);
+    .where(gte(financeContracts.eventDate, today));
   const byMonth = await tx
-    .select({ month: sql<string>`to_char(${financeContracts.eventDate}, 'YYYY-MM')`, contracts: sql<number>`count(*)::int`, total: sum(financeContracts.total), balance: sum(sql`greatest(${financeContracts.balance}, 0)`) })
+    .select({ month: sql<string>`to_char(${financeContracts.eventDate}, 'YYYY-MM')`, contracts: sql<number>`count(*)::int`, total: sum(financeContracts.total) })
     .from(financeContracts)
     .where(inRange)
     .groupBy(sql`1`)
@@ -83,5 +89,5 @@ export async function financeOverview(tx: Tx, from: string, to: string, today: s
     .limit(500);
   const [{ undated }] = await tx.select({ undated: sql<number>`count(*)::int` }).from(financeContracts).where(sql`${financeContracts.eventDate} is null`);
   const [last] = await tx.select().from(financeImports).orderBy(sql`${financeImports.createdAt} desc`).limit(1);
-  return { kpis: k, byMonth, bySource, list, undated, lastImport: last ?? null };
+  return { kpis: k, ahead, byMonth, bySource, list, undated, lastImport: last ?? null };
 }
