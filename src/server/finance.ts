@@ -8,8 +8,15 @@ import { audit } from "./audit";
  * Finance: contracts from a Goodshuffle export (upsert by project number), linked to the lead with that
  * Goodshuffle project. Accounting itself lives in Wave; linking contracts to Wave comes later.
  */
-export async function importContracts(ctx: Ctx, input: { rows: FinanceRow[]; skipped: number; filename: string | null; mapping: FinanceMapping }, now = new Date()) {
+export async function importContracts(
+  ctx: Ctx,
+  input: { rows: FinanceRow[]; skipped: number; filename: string | null; mapping: FinanceMapping; replace?: boolean },
+  now = new Date(),
+) {
   return withCtx(ctx, async (tx) => {
+    // "replace": this file becomes the whole set (same transaction, so a failed import changes nothing)
+    let replaced = 0;
+    if (input.replace) replaced = (await tx.delete(financeContracts).returning({ id: financeContracts.id })).length;
     const projects = [...new Set(input.rows.map((r) => r.project))];
     const existing = projects.length ? await tx.select({ project: financeContracts.project }).from(financeContracts).where(inArray(financeContracts.project, projects)) : [];
     const had = new Set(existing.map((e) => e.project));
@@ -34,8 +41,8 @@ export async function importContracts(ctx: Ctx, input: { rows: FinanceRow[]; ski
       else created++;
     }
     await tx.update(financeImports).set({ created, updated }).where(eq(financeImports.id, imp.id));
-    await audit(tx, ctx, "finance.imported", null, { filename: input.filename, created, updated, skipped: input.skipped });
-    return { created, updated, skipped: input.skipped, linked: [...byProject.keys()].filter((p) => leadBy.has(p)).length };
+    await audit(tx, ctx, "finance.imported", null, { filename: input.filename, created, updated, skipped: input.skipped, ...(input.replace ? { replacedPrevious: replaced } : {}) });
+    return { created, updated, skipped: input.skipped, linked: [...byProject.keys()].filter((p) => leadBy.has(p)).length, replaced };
   });
 }
 

@@ -16,6 +16,7 @@ export function FinanceImportForm() {
   const [mapping, setMapping] = useState<FinanceMapping>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string; errors?: string[] } | null>(null);
   const [pending, start] = useTransition();
+  const [replace, setReplace] = useState(false);
 
   const onFile = async (f: File | undefined) => {
     setMsg(null);
@@ -82,18 +83,23 @@ export function FinanceImportForm() {
               </tbody>
             </table>
           </div>
+          <label className="flex items-start gap-2 rounded-[var(--radius-control)] border border-edge bg-card-2 px-3 py-2 text-sm">
+            <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="mt-0.5" />
+            <span><span className="font-medium">Replace everything imported before</span><span className="block text-xs text-muted">This file becomes the full list: contracts not in it are removed. Leave unticked to add and update only.</span></span>
+          </label>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               className="btn-primary"
               disabled={pending || !mapping.project || !mapping.total || valid === 0}
               onClick={() => start(async () => {
-                const r = await importFinanceAction({ filename: file.name, mapping: mapping as Record<string, string>, rows: file.rows });
+                if (replace && !confirm(`Replace all previously imported contracts with the ${valid} in this file?`)) return;
+                const r = await importFinanceAction({ filename: file.name, mapping: mapping as Record<string, string>, rows: file.rows, replace });
                 setMsg(r.ok ? { ok: true, text: r.message, errors: r.data.errors } : { ok: false, text: r.error });
                 if (r.ok) router.refresh();
               })}
             >
-              {pending ? "Importing…" : `Import ${valid} contract${valid === 1 ? "" : "s"}`}
+              {pending ? "Importing…" : `${replace ? "Replace with" : "Import"} ${valid} contract${valid === 1 ? "" : "s"}`}
             </button>
             <span className="text-sm text-muted">
               {notContracts > 0 && `${notContracts} quote/lost project${notContracts === 1 ? "" : "s"} left out (not signed contracts). `}

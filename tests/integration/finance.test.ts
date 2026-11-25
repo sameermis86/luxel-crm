@@ -21,13 +21,21 @@ afterAll(closeDb);
 describe("finance", () => {
   it("imports contracts, links them to the lead by project number, and re-importing updates", async () => {
     const r = await importContracts(owner, { rows: [row("1048207", 9040, 2712, "2027-06-12"), row("2000001", 5000, 5000, "2026-03-01")], skipped: 1, filename: "gs.csv", mapping: { project: "P", total: "T" } });
-    expect(r).toEqual({ created: 2, updated: 0, skipped: 1, linked: 1 });
+    expect(r).toEqual({ created: 2, updated: 0, skipped: 1, linked: 1, replaced: 0 });
     const again = await importContracts(owner, { rows: [row("1048207", 9040, 9040, "2027-06-12")], skipped: 0, filename: "gs2.csv", mapping: { project: "P", total: "T" } });
     expect(again).toMatchObject({ created: 0, updated: 1 });
     const all = await withCtx(owner, (tx) => tx.select().from(financeContracts));
     expect(all.find((c) => c.project === "1048207")).toMatchObject({ leadId: lead, paid: 9040, balance: 0 });
     const log = await withCtx(owner, (tx) => tx.select().from(auditLog));
     expect(log.filter((l) => l.action === "finance.imported").length).toBe(2);
+  });
+
+  it("replace: the new file becomes the whole set, in one go, and the audit log says how many went", async () => {
+    const before = await withCtx(owner, (tx) => tx.select().from(financeContracts));
+    const r = await importContracts(owner, { rows: before.map((c) => row(c.project, c.total ?? 0, c.paid, c.eventDate)), skipped: 0, filename: "same.csv", mapping: {}, replace: true });
+    expect(r).toMatchObject({ replaced: before.length, created: before.length, updated: 0 });
+    const log = await withCtx(owner, (tx) => tx.select().from(auditLog));
+    expect(log.some((l) => (l.metadata as any)?.replacedPrevious === before.length)).toBe(true);
   });
 
   it("sums a year by event date: booked, collected, still to collect, overdue", async () => {
