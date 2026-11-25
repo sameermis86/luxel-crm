@@ -534,3 +534,43 @@ export const auditLog = pgTable(
   (t) => [index("audit_log_org_at_idx").on(t.orgId, t.at)],
 );
 export type AuditEntry = typeof auditLog.$inferSelect;
+
+/* ----------------------------- Finance ----------------------------- */
+
+/** One signed contract per Goodshuffle project, from a Goodshuffle export (re-importing updates it). */
+export const financeContracts = pgTable(
+  "finance_contracts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    project: text("project").notNull(), // Goodshuffle project number
+    leadId: uuid("lead_id").references(() => leads.id),
+    name: text("name"),
+    client: text("client"),
+    eventDate: date("event_date"),
+    status: text("status"), // as exported (e.g. Signed, Completed)
+    total: money("total"), // contract total incl. tax as exported
+    paid: money("paid"),
+    balance: money("balance"), // as exported; else total - paid
+    currency: text("currency").notNull().default("CAD"),
+    importId: uuid("import_id"),
+    raw: jsonb("raw"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("finance_contracts_org_project_uq").on(t.orgId, t.project), index("finance_contracts_event_idx").on(t.orgId, t.eventDate)],
+);
+export type FinanceContract = typeof financeContracts.$inferSelect;
+
+export const financeImports = pgTable("finance_imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
+  filename: text("filename"),
+  rows: integer("rows").notNull().default(0),
+  created: integer("created").notNull().default(0),
+  updated: integer("updated").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  mapping: jsonb("mapping"),
+  importedBy: uuid("imported_by").references(() => users.id),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});

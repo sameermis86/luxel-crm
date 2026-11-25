@@ -10,6 +10,7 @@
 export const C = {
   leads: "#5B7FC7",
   won: "#3D8A5F",
+  revenue: "#3D8A5F", // Finance: booked contract value (single series)
   qualified: "#3D8A5F",
   needs_info: "#D4A017",
   unqualified: "#8B6BB8",
