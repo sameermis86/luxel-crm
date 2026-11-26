@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { getDb, type Ctx } from "@/db/client";
 import type { AccessLevel, Module, Role } from "@/db/schema";
 import { effectiveAccess, hasLevel, LEVELS, requiresMfa, type AccessMap } from "@/lib/access";
-import { readStamp, SESSION_COOKIE } from "@/lib/session-cookie";
+import { readStamp, readTrust, trustValid, SESSION_COOKIE, TRUST_COOKIE } from "@/lib/session-cookie";
 
 export interface Session {
   userId: string;
@@ -24,6 +24,8 @@ export interface Session {
   mfa?: "ok" | "needs_verify" | "needs_setup" | "off";
   /** this browser's session started before a "sign out everywhere" / password change */
   revoked?: boolean;
+  /** 2-step skipped because this browser is trusted (until this time) */
+  trustedUntil?: Date | null;
 }
 
 export const DEV_COOKIE = "luxel_dev_user";
@@ -90,6 +92,19 @@ export async function getSession(): Promise<Session | null> {
   if (s.sessionsValidAfter && stamp.start < s.sessionsValidAfter.getTime()) return { ...s, revoked: true };
 
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  // a device trusted for 30 days after entering a code skips the code (still needs the password)
+  if (aal?.currentLevel !== "aal2" && aal?.nextLevel === "aal2") {
+    const trust = await readTrust((await cookies()).get(TRUST_COOKIE)?.value);
+    if (trust) {
+      const { data: f } = await supabase.auth.mfa.listFactors();
+      const factorIds = (f?.totp ?? []).filter((x) => x.status === "verified").map((x) => x.id);
+      if (trustValid(trust, { uid: data.user.id, now: Date.now(), validAfter: s.sessionsValidAfter?.getTime() ?? null, factorIds })) {
+        s.mfa = "ok";
+        s.trustedUntil = new Date(trust.exp);
+        return s;
+      }
+    }
+  }
   // MFA_REQUIRED=off (Vercel) is the emergency switch if 2-step ever stops working; people who set it up still verify
   const required = process.env.MFA_REQUIRED !== "off" && requiresMfa(s.role, s.access);
   s.mfa = aal?.currentLevel === "aal2" ? "ok" : aal?.nextLevel === "aal2" ? "needs_verify" : required ? "needs_setup" : "off";

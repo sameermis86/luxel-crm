@@ -9,7 +9,7 @@ import { PASSWORD_MIN } from "@/lib/password";
 import { IDLE_MS, MAX_MS } from "@/lib/session-cookie";
 import { PageHeader } from "@/components/page-header";
 import { ActionForm } from "@/components/action-form";
-import { changePasswordAction, signOutEverywhereAction } from "./actions";
+import { changePasswordAction, signOutEverywhereAction, untrustDeviceAction } from "./actions";
 import { TwoStep } from "./two-step";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export const metadata = { title: "My account" };
 const LABELS: Record<string, string> = {
   "auth.sign_in": "Signed in", "auth.sign_out": "Signed out", "auth.password_changed": "Changed password",
   "auth.sign_out_everywhere": "Signed out everywhere", "auth.mfa_enrolled": "Turned on 2-step", "auth.mfa_removed": "Turned off 2-step",
+  "auth.device_trusted": "Trusted a device for 30 days", "auth.device_untrusted": "Stopped trusting a device",
 };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ setup?: string }> }) {
@@ -47,6 +48,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           {mfaRequired ? " Required for your access." : " Optional for your access, and recommended."}
         </p>
         {supa ? <TwoStep required={mfaRequired} /> : <p className="mt-3 text-sm text-muted">Not used in local development.</p>}
+        {s.trustedUntil && (
+          <form action={untrustDeviceAction} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-edge bg-card-2 px-3 py-2 text-sm">
+            <span>This device is trusted until {s.trustedUntil.toLocaleDateString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium" })}: no code needed here.</span>
+            <button className="btn btn-sm">Stop trusting this device</button>
+          </form>
+        )}
+        <p className="hint mt-2">When you enter a code you can tick &ldquo;Trust this device for 30 days&rdquo;. Sign out everywhere or a password change ends that on every device.</p>
       </section>
 
       <section className="card p-5" id="password">

@@ -51,3 +51,43 @@ export function stampState(s: SessionStamp, now = Date.now()): "ok" | "touch" | 
 }
 
 export const cookieOptions = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: MAX_MS / 1000 };
+
+/* ----------------------------- trusted device (skip the 2-step code for 30 days) ----------------------------- */
+
+export const TRUST_COOKIE = "luxel_trusted_device";
+export const TRUST_MS = 30 * 86_400_000;
+
+/** uid: Supabase auth user; fid: the authenticator it was verified with; iat/exp: issued / expires (ms). */
+export interface TrustStamp { uid: string; fid: string; iat: number; exp: number }
+
+async function trustKey() {
+  return crypto.subtle.importKey("raw", enc.encode("luxel-trust-v1:" + secret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+
+export async function signTrust(t: TrustStamp): Promise<string> {
+  const body = b64url(enc.encode(JSON.stringify(t)));
+  return `${body}.${b64url(await crypto.subtle.sign("HMAC", await trustKey(), enc.encode(body)))}`;
+}
+
+export async function readTrust(value: string | undefined | null): Promise<TrustStamp | null> {
+  if (!value) return null;
+  const [body, sig] = value.split(".");
+  if (!body || !sig) return null;
+  try {
+    if (!(await crypto.subtle.verify("HMAC", await trustKey(), fromB64url(sig), enc.encode(body)))) return null;
+    const t = JSON.parse(new TextDecoder().decode(fromB64url(body))) as TrustStamp;
+    return typeof t.uid === "string" && typeof t.fid === "string" && Number.isFinite(t.iat) && Number.isFinite(t.exp) ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A trusted device still counts only for the same login, before it expires, if it was trusted after the
+ * last "sign out everywhere" / password change, and while that authenticator is still set up.
+ */
+export function trustValid(t: TrustStamp | null, o: { uid: string; now: number; validAfter: number | null; factorIds: string[] }): boolean {
+  return !!t && t.uid === o.uid && t.exp > o.now && t.iat <= o.now + 60_000 && (o.validAfter == null || t.iat >= o.validAfter) && o.factorIds.includes(t.fid);
+}
+
+export const trustCookieOptions = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: TRUST_MS / 1000 };

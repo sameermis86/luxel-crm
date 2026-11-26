@@ -11,7 +11,7 @@ import { auditNow } from "@/server/audit";
 import { breachCount } from "@/server/pwned";
 import { arrivedByLink } from "@/server/auth-link";
 import { passwordProblems } from "@/lib/password";
-import { SESSION_COOKIE, cookieOptions, readStamp, signStamp } from "@/lib/session-cookie";
+import { SESSION_COOKIE, TRUST_COOKIE, cookieOptions, readStamp, readTrust, signStamp, signTrust, trustCookieOptions } from "@/lib/session-cookie";
 
 type R = { ok: true; message: string } | { ok: false; error: string };
 
@@ -60,6 +60,9 @@ export async function changePasswordAction(_: R | null, fd: FormData): Promise<R
   const jar = await cookies();
   const stamp = await readStamp(jar.get(SESSION_COOKIE)?.value);
   if (stamp) jar.set(SESSION_COOKIE, await signStamp({ ...stamp, start: now + 1, last: now + 1 }), cookieOptions);
+  // this device stays trusted (if it was); trusted devices elsewhere end with the other sessions
+  const trust = s.trustedUntil || s.mfa === "ok" ? await readTrust(jar.get(TRUST_COOKIE)?.value) : null;
+  if (trust && trust.exp > now) jar.set(TRUST_COOKIE, await signTrust({ ...trust, iat: now + 1 }), trustCookieOptions);
   await auditNow(ctxFor(s), "auth.password_changed", `user:${s.userId}`, { via: byLink ? "email link" : "account page" });
   return { ok: true, message: "Password changed. Other devices have been signed out." };
 }
@@ -73,7 +76,9 @@ export async function signOutEverywhereAction(): Promise<void> {
     const { createSupabaseServer } = await import("@/server/supabase");
     await (await createSupabaseServer()).auth.signOut({ scope: "global" });
   }
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  jar.delete(TRUST_COOKIE); // every trusted device is forgotten too (sessions_valid_after covers the others)
   redirect("/login?reason=signed_out_everywhere");
 }
 
@@ -88,4 +93,12 @@ export async function recordMfaChangeAction(): Promise<R> {
   const verified = (data?.totp ?? []).filter((f) => f.status === "verified").length;
   await auditNow(ctxFor(s), verified ? "auth.mfa_enrolled" : "auth.mfa_removed", `user:${s.userId}`, { authenticators: verified });
   return { ok: true, message: verified ? "2-step verification is on" : "2-step verification is off" };
+}
+
+/** Stop skipping the 2-step code on this browser. */
+export async function untrustDeviceAction(): Promise<void> {
+  const s = await accountSession();
+  (await cookies()).delete(TRUST_COOKIE);
+  await auditNow(ctxFor(s), "auth.device_untrusted", `user:${s.userId}`);
+  redirect("/account");
 }

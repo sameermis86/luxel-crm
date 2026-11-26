@@ -20,6 +20,10 @@ else the role default (manager: sales manage, ops edit; staff: sales edit, ops e
   current password (except within 30 minutes of an invite/reset link) and signs out other devices.
 - 2-step (authenticator app, Supabase TOTP): required for owners and anyone with Finance or Admin access;
   optional for others. Emergency switch: `MFA_REQUIRED=off` in Vercel (people who set it up still verify).
+- Trusted device: after entering a code, "Trust this device for 30 days" sets `luxel_trusted_device` (HMAC, bound to
+  the login and the authenticator). It skips the code only (password still needed). Ends on expiry, "sign out
+  everywhere" or a password change (`sessions_valid_after`), removing/replacing the authenticator, or "Stop trusting
+  this device" on the Account page. Audited.
 - Sessions: our signed cookie `luxel_session` (HMAC, `SESSION_SECRET` or `CRON_SECRET`): 8h idle, 7 days max,
   enforced in middleware. "Sign out everywhere" and password changes set `users.sessions_valid_after`.
 - Audit log (`audit_log`, append-only): sign-ins/outs, password and 2-step changes, people and access changes,
