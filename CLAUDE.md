@@ -1,6 +1,6 @@
 # CLAUDE.md: Luxel CRM
 
-Luxel Decor & Flowers (Vaughan, ON) operations app, organised by module: **Sales & CRM** (lead management), **Fulfillment & Ops** (`/ops`: event board, pull sheets, setup/teardown from signed Goodshuffle contracts; see docs/ops.md), **Finance** (`/finance`: contracts and revenue imported from Goodshuffle exports; accounting stays in Wave, linking later), **Floral orders** (next phase), **Admin** (settings, team & access, audit log). Single tenant today, `org_id` on every table for multi-tenancy later. Built to merge into StemLedger (same stack and conventions). See README.md for setup and architecture.
+Luxel Decor & Flowers (Vaughan, ON) operations app, organised by module: **Sales & CRM** (lead management), **Fulfillment & Ops** (`/ops`: event board, pull sheets, setup/teardown from signed Goodshuffle contracts; see docs/ops.md), **Finance** (`/finance`: revenue from Goodshuffle contract exports, plus Wave invoices synced read-only and matched to contracts by project number; see docs/wave.md), **Floral orders** (next phase), **Admin** (settings, team & access, audit log). Single tenant today, `org_id` on every table for multi-tenancy later. Built to merge into StemLedger (same stack and conventions). See README.md for setup and architecture.
 
 ## Rules (do not break)
 

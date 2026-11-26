@@ -574,3 +574,31 @@ export const financeImports = pgTable("finance_imports", {
   importedBy: uuid("imported_by").references(() => users.id),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+/** Read-only copy of Wave (accounting) invoices, matched to a Goodshuffle contract by project number. */
+export const waveInvoices = pgTable(
+  "wave_invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    waveId: text("wave_id").notNull(),
+    businessId: text("business_id").notNull(),
+    invoiceNumber: text("invoice_number"),
+    status: text("status").notNull(), // Wave: DRAFT, SAVED, SENT, VIEWED, UNPAID, PARTIAL, PAID, OVERDUE
+    title: text("title"),
+    poNumber: text("po_number"),
+    invoiceDate: date("invoice_date"),
+    dueDate: date("due_date"),
+    customerName: text("customer_name"),
+    total: money("total"),
+    amountDue: money("amount_due"),
+    currency: text("currency"),
+    viewUrl: text("view_url"),
+    project: text("project"), // Goodshuffle project number found on the invoice
+    contractId: uuid("contract_id").references(() => financeContracts.id, { onDelete: "set null" }),
+    waveModifiedAt: ts("wave_modified_at"),
+    syncedAt: ts("synced_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("wave_invoices_org_wave_uq").on(t.orgId, t.waveId), index("wave_invoices_contract_idx").on(t.contractId)],
+);
+export type WaveInvoice = typeof waveInvoices.$inferSelect;

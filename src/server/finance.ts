@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { withCtx, type Ctx, type Tx } from "@/db/client";
-import { financeContracts, financeImports, leads } from "@/db/schema";
+import { financeContracts, financeImports, leads, waveInvoices } from "@/db/schema";
+import { INVOICED_STATUSES } from "@/lib/wave";
 import type { FinanceMapping, FinanceRow } from "@/lib/finance";
 import { audit } from "./audit";
 
@@ -89,5 +90,25 @@ export async function financeOverview(tx: Tx, from: string, to: string, today: s
     .limit(500);
   const [{ undated }] = await tx.select({ undated: sql<number>`count(*)::int` }).from(financeContracts).where(sql`${financeContracts.eventDate} is null`);
   const [last] = await tx.select().from(financeImports).orderBy(sql`${financeImports.createdAt} desc`).limit(1);
-  return { kpis: k, ahead, byMonth, bySource, list, undated, lastImport: last ?? null };
+
+  // Wave: invoiced per contract (drafts aren't invoiced), the year's invoiced total by invoice date,
+  // and invoices we couldn't match to a contract
+  const invoiced = sql`${waveInvoices.status} in (${sql.join(INVOICED_STATUSES.map((x) => sql`${x}`), sql`, `)})`;
+  const perContract = await tx
+    .select({ contractId: waveInvoices.contractId, total: sum(waveInvoices.total), count: sql<number>`count(*)::int` })
+    .from(waveInvoices)
+    .where(and(invoiced, isNotNull(waveInvoices.contractId)))
+    .groupBy(waveInvoices.contractId);
+  const [inv] = await tx
+    .select({ total: sum(waveInvoices.total), count: sql<number>`count(*)::int` })
+    .from(waveInvoices)
+    .where(and(invoiced, gte(waveInvoices.invoiceDate, from), lt(waveInvoices.invoiceDate, to)));
+  const unmatched = await tx
+    .select({ id: waveInvoices.id, invoiceNumber: waveInvoices.invoiceNumber, customerName: waveInvoices.customerName, invoiceDate: waveInvoices.invoiceDate, total: waveInvoices.total, project: waveInvoices.project, viewUrl: waveInvoices.viewUrl })
+    .from(waveInvoices)
+    .where(and(invoiced, sql`${waveInvoices.contractId} is null`, gte(waveInvoices.invoiceDate, from), lt(waveInvoices.invoiceDate, to)))
+    .orderBy(asc(waveInvoices.invoiceDate))
+    .limit(100);
+  const invoicedBy = new Map(perContract.map((p) => [p.contractId!, p]));
+  return { kpis: k, ahead, byMonth, bySource, list, undated, lastImport: last ?? null, wave: { invoicedBy, year: inv, unmatched } };
 }

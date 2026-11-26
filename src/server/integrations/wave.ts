@@ -1,0 +1,149 @@
+import { and, eq, notInArray } from "drizzle-orm";
+import { withCtx, systemCtx } from "@/db/client";
+import { financeContracts, integrationState, waveInvoices } from "@/db/schema";
+import { findProject, num, type WaveInvoiceNode } from "@/lib/wave";
+
+/**
+ * Wave (accounting) → Finance, read-only: copies the business's invoices and matches each to its
+ * Goodshuffle contract by project number. Never creates or changes anything in Wave. Full re-read
+ * each run (invoices are few), so edits and deletions in Wave show up on the next sync.
+ */
+const ENDPOINT = "https://gql.waveapps.com/graphql/public";
+const STATE_KEY = "wave_sync";
+const PAGE_SIZE = 100;
+const MAX_PAGES = 50;
+
+export interface WaveClient {
+  businesses(): Promise<{ id: string; name: string; isPersonal?: boolean; currency?: { code: string } | null }[]>;
+  invoices(businessId: string, page: number, pageSize: number): Promise<{ totalPages: number; items: WaveInvoiceNode[] }>;
+}
+
+export interface WaveState {
+  lastRunAt?: string;
+  lastError?: string | null;
+  businessId?: string;
+  businessName?: string;
+  invoices?: number;
+  matched?: number;
+}
+
+export const waveConfigured = (env: Record<string, string | undefined> = process.env) => !!env.WAVE_ACCESS_TOKEN?.trim();
+
+export function waveGraphqlClient(token: string, fetcher: typeof fetch = fetch): WaveClient {
+  const gql = async <T>(query: string, variables: Record<string, unknown> = {}): Promise<T> => {
+    const r = await fetcher(ENDPOINT, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (r.status === 401 || r.status === 403) throw new Error(`Wave refused the token (${r.status}): check WAVE_ACCESS_TOKEN`);
+    const j = (await r.json().catch(() => ({}))) as { data?: T; errors?: { message?: string }[] };
+    if (!r.ok || j.errors?.length) throw new Error(`Wave API: ${j.errors?.[0]?.message ?? `HTTP ${r.status}`}`);
+    return j.data as T;
+  };
+  return {
+    async businesses() {
+      const d = await gql<{ businesses: { edges: { node: { id: string; name: string; isPersonal: boolean; currency: { code: string } | null } }[] } }>(
+        `query { businesses(page: 1, pageSize: 20) { edges { node { id name isPersonal currency { code } } } } }`,
+      );
+      return d.businesses.edges.map((e) => e.node);
+    },
+    async invoices(businessId, page, pageSize) {
+      const d = await gql<{ business: { invoices: { pageInfo: { totalPages: number }; edges: { node: WaveInvoiceNode }[] } } | null }>(
+        `query ($businessId: ID!, $page: Int!, $pageSize: Int!) {
+          business(id: $businessId) {
+            invoices(page: $page, pageSize: $pageSize) {
+              pageInfo { currentPage totalPages totalCount }
+              edges { node {
+                id invoiceNumber status title subhead poNumber memo invoiceDate dueDate modifiedAt viewUrl
+                customer { name } currency { code } total { value } amountDue { value }
+              } }
+            }
+          }
+        }`,
+        { businessId, page, pageSize },
+      );
+      if (!d.business) throw new Error("Wave business not found: check WAVE_BUSINESS_ID");
+      return { totalPages: d.business.invoices.pageInfo.totalPages, items: d.business.invoices.edges.map((e) => e.node) };
+    },
+  };
+}
+
+export async function getWaveState(orgId: string): Promise<WaveState> {
+  const [row] = await withCtx(systemCtx(orgId), (tx) => tx.select().from(integrationState).where(and(eq(integrationState.orgId, orgId), eq(integrationState.key, STATE_KEY))));
+  return (row?.value as WaveState) ?? {};
+}
+async function saveState(orgId: string, value: WaveState) {
+  await withCtx(systemCtx(orgId), (tx) =>
+    tx.insert(integrationState).values({ orgId, key: STATE_KEY, value, updatedAt: new Date() }).onConflictDoUpdate({ target: [integrationState.orgId, integrationState.key], set: { value, updatedAt: new Date() } }),
+  );
+}
+
+/** Pick the business: WAVE_BUSINESS_ID if set, else the only (non-personal) business on the account. */
+async function chooseBusiness(client: WaveClient, wanted?: string) {
+  const all = await client.businesses();
+  if (wanted) {
+    const b = all.find((x) => x.id === wanted);
+    if (!b) throw new Error("WAVE_BUSINESS_ID isn't one of this token's businesses");
+    return b;
+  }
+  const real = all.filter((b) => !b.isPersonal);
+  if (real.length === 1) return real[0];
+  if (!real.length) throw new Error("No Wave business found for this token");
+  throw new Error(`This Wave login has ${real.length} businesses: set WAVE_BUSINESS_ID to choose (${real.map((b) => b.name).join(", ")})`);
+}
+
+export async function runWaveSync(orgId: string, client: WaveClient, opts: { now?: Date; businessId?: string } = {}): Promise<WaveState> {
+  const now = opts.now ?? new Date();
+  const prev = await getWaveState(orgId);
+  try {
+    const business = await chooseBusiness(client, opts.businessId ?? process.env.WAVE_BUSINESS_ID?.trim() ?? undefined);
+    const all: WaveInvoiceNode[] = [];
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const r = await client.invoices(business.id, page, PAGE_SIZE);
+      all.push(...r.items);
+      if (page >= r.totalPages) break;
+    }
+    const ctx = systemCtx(orgId);
+    let matched = 0;
+    await withCtx(ctx, async (tx) => {
+      const contracts = await tx.select({ id: financeContracts.id, project: financeContracts.project }).from(financeContracts);
+      const byProject = new Map(contracts.map((c) => [c.project, c.id]));
+      const known = new Set(byProject.keys());
+      for (const inv of all) {
+        const project = findProject(inv, known);
+        const contractId = project ? byProject.get(project) ?? null : null;
+        if (contractId) matched++;
+        const vals = {
+          businessId: business.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: (inv.status ?? "UNKNOWN").toUpperCase(),
+          title: inv.title,
+          poNumber: inv.poNumber,
+          invoiceDate: inv.invoiceDate?.slice(0, 10) ?? null,
+          dueDate: inv.dueDate?.slice(0, 10) ?? null,
+          customerName: inv.customer?.name ?? null,
+          total: num(inv.total),
+          amountDue: num(inv.amountDue),
+          currency: inv.currency?.code ?? business.currency?.code ?? null,
+          viewUrl: inv.viewUrl,
+          project,
+          contractId,
+          waveModifiedAt: inv.modifiedAt ? new Date(inv.modifiedAt) : null,
+          syncedAt: now,
+        };
+        await tx.insert(waveInvoices).values({ orgId, waveId: inv.id, ...vals }).onConflictDoUpdate({ target: [waveInvoices.orgId, waveInvoices.waveId], set: vals });
+      }
+      // deleted in Wave (or another business): drop our copy
+      const seen = all.map((i) => i.id);
+      if (seen.length) await tx.delete(waveInvoices).where(notInArray(waveInvoices.waveId, seen));
+      else await tx.delete(waveInvoices);
+    });
+    const state: WaveState = { lastRunAt: now.toISOString(), lastError: null, businessId: business.id, businessName: business.name, invoices: all.length, matched };
+    await saveState(orgId, state);
+    return state;
+  } catch (e) {
+    await saveState(orgId, { ...prev, lastRunAt: now.toISOString(), lastError: (e as Error).message });
+    throw e;
+  }
+}

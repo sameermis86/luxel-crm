@@ -3,6 +3,7 @@ import { Upload } from "lucide-react";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
 import { financeOverview, financeYears } from "@/server/finance";
+import { getWaveState, waveConfigured } from "@/server/integrations/wave";
 import { dateInTz } from "@/lib/dates";
 import { titleCase } from "@/lib/format";
 import { C } from "@/lib/chart-colors";
@@ -25,9 +26,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
     const fallback = years.includes(thisYear) ? thisYear : years.find((y) => y > thisYear) ?? years[years.length - 1] ?? thisYear;
     const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : fallback;
     const o = await financeOverview(tx, `${year}-01-01`, `${year + 1}-01-01`, today);
-    return { ...o, year, years, today };
+    return { ...o, year, years, today, waveState: waveConfigured() ? await getWaveState(p.session.orgId) : null };
   }, "finance:view");
-  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page } = data;
+  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page, wave, waveState } = data;
+  const waveOn = !!waveState?.lastRunAt && !waveState.lastError;
   const canImport = can(page.session, "finance:manage");
   const months = Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
@@ -66,7 +68,11 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label={`${year} figures`}>
             <Kpi label={`Revenue, ${year} events`} value={cad(kpis.total)} sub={`${kpis.contracts} signed contract${kpis.contracts === 1 ? "" : "s"}`} />
             <Kpi label="Average booking" value={cad(avg)} sub={`${year} events`} />
-            <Kpi label="Biggest month" value={best ? cad(best.total) : "—"} sub={best ? `${best.label} ${year}, ${best.contracts} contract${best.contracts === 1 ? "" : "s"}` : "—"} />
+            {waveOn ? (
+              <Kpi label={`Invoiced in Wave, ${year}`} value={cad(wave.year.total)} sub={`${wave.year.count} invoice${wave.year.count === 1 ? "" : "s"} dated ${year}`} />
+            ) : (
+              <Kpi label="Biggest month" value={best ? cad(best.total) : "—"} sub={best ? `${best.label} ${year}, ${best.contracts} contract${best.contracts === 1 ? "" : "s"}` : "—"} />
+            )}
             <Kpi label="All upcoming events" value={cad(ahead.total)} sub={`${ahead.contracts} contract${ahead.contracts === 1 ? "" : "s"} from today on, every year`} />
           </section>
 
@@ -97,9 +103,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
               <h2 className="px-5 pt-5 text-[19px]">Contracts, {year}</h2>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[560px]">
-                  <thead className="bg-card-2"><tr><th className="th">Event</th><th className="th">Project</th><th className="th">Client</th><th className="th text-right">Revenue</th></tr></thead>
+                  <thead className="bg-card-2"><tr><th className="th">Event</th><th className="th">Project</th><th className="th">Client</th><th className="th text-right">Revenue</th>{waveOn && <th className="th text-right">Invoiced in Wave</th>}</tr></thead>
                   <tbody className="divide-y divide-edge">
-                    {list.length === 0 && <tr><td colSpan={4} className="td py-10 text-center text-muted">No contracts with {year} events.</td></tr>}
+                    {list.length === 0 && <tr><td colSpan={waveOn ? 5 : 4} className="td py-10 text-center text-muted">No contracts with {year} events.</td></tr>}
                     {list.map(({ c, recordId }) => {
                       return (
                         <tr key={c.id}>
@@ -107,6 +113,14 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                           <td className="td"><span className="font-mono text-xs text-muted">{c.project}</span>{c.leadId && <Link href={`/leads/${c.leadId}`} className="ml-2 text-xs text-muted hover:text-ink">{recordId}</Link>}</td>
                           <td className="td">{c.client ?? c.name ?? "—"}</td>
                           <td className="td text-right tabular">{cad(c.total ?? 0, false)}</td>
+                          {waveOn && (() => {
+                            const w = wave.invoicedBy.get(c.id);
+                            return (
+                              <td className="td text-right tabular">
+                                {w ? <>{cad(w.total, false)}{w.count > 1 && <span className="block text-[11px] text-muted">{w.count} invoices</span>}</> : <span className="chip border-amber/30 bg-amber-soft text-amber">Not invoiced</span>}
+                              </td>
+                            );
+                          })()}
                         </tr>
                       );
                     })}
@@ -126,9 +140,38 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
               </section>
               <section className="card p-5 text-sm">
                 <h2 className="text-[17px]">Accounting: Wave</h2>
-                <p className="mt-1 text-muted">Invoices, payments and the books stay in Wave. Linking won contracts to Wave comes later; for now the numbers here come from Goodshuffle.</p>
-                <span className="chip mt-2 border-edge bg-card-2 text-muted">Not linked yet</span>
+                {!waveState ? (
+                  <>
+                    <p className="mt-1 text-muted">Not connected. Add <code className="font-mono text-xs">WAVE_ACCESS_TOKEN</code> in Vercel (a Full Access Token from Wave&apos;s developer portal) to bring in invoices, read-only.</p>
+                    <span className="chip mt-2 border-edge bg-card-2 text-muted">Not linked yet</span>
+                  </>
+                ) : waveState.lastError ? (
+                  <p className="mt-1 text-bloom">Last sync failed: {waveState.lastError}</p>
+                ) : !waveState.lastRunAt ? (
+                  <p className="mt-1 text-muted">Connected; the first sync runs within 15 minutes.</p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-muted">
+                      {waveState.businessName}: {waveState.invoices} invoice{waveState.invoices === 1 ? "" : "s"}, {waveState.matched} matched to a contract by the Goodshuffle project number on the invoice. Read-only; nothing is changed in Wave.
+                    </p>
+                    <p className="hint">Synced {new Date(waveState.lastRunAt).toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" })}</p>
+                  </>
+                )}
               </section>
+              {waveOn && wave.unmatched.length > 0 && (
+                <section className="card p-5 text-sm">
+                  <h2 className="text-[17px]">Wave invoices without a contract, {year}</h2>
+                  <p className="mt-1 text-xs text-muted">No Goodshuffle project number we know on these. Add it to the invoice&apos;s PO/SO number in Wave to match it.</p>
+                  <ul className="mt-2 divide-y divide-edge">
+                    {wave.unmatched.map((u) => (
+                      <li key={u.id} className="flex justify-between gap-2 py-1.5">
+                        <span className="min-w-0 truncate">{u.viewUrl ? <a href={u.viewUrl} target="_blank" rel="noreferrer" className="hover:underline">#{u.invoiceNumber}</a> : `#${u.invoiceNumber}`} <span className="text-muted">{u.customerName ?? ""}{u.project ? ` · ${u.project}` : ""}</span></span>
+                        <span className="tabular">{cad(u.total ?? 0)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <p className="text-xs text-muted">
                 Last import {lastImport.createdAt.toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" })}{lastImport.filename ? ` (${lastImport.filename})` : ""}: {lastImport.created} new, {lastImport.updated} updated.
                 {undated > 0 ? ` ${undated} contract(s) have no event date and aren't in any year.` : ""}

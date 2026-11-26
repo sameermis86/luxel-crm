@@ -7,6 +7,7 @@ import { runOpsSync } from "@/server/ops/sync";
 import { applyBookings, undoBookingWins, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
 import { imapClient, mailboxConfigured, runMailboxSync } from "@/server/integrations/mailbox";
+import { runWaveSync, waveConfigured, waveGraphqlClient } from "@/server/integrations/wave";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -103,6 +104,17 @@ async function handle(req: NextRequest) {
     } catch (e) {
       console.error("[cron] setmore sync failed", e);
       out.setmore = { error: (e as Error).message };
+      failed = true;
+    }
+  }
+  // Wave (accounting): invoices, read-only, matched to Goodshuffle contracts
+  if (step("wave") && waveConfigured()) {
+    try {
+      const w = await runWaveSync(orgId, waveGraphqlClient(process.env.WAVE_ACCESS_TOKEN!.trim()));
+      out.wave = { business: w.businessName, invoices: w.invoices, matched: w.matched };
+    } catch (e) {
+      console.error("[cron] wave sync failed", e);
+      out.wave = { error: (e as Error).message };
       failed = true;
     }
   }
