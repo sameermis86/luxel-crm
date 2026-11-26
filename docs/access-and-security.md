@@ -13,8 +13,12 @@ else the role default (manager: sales manage, ops edit; staff: sales edit, ops e
 - Admin → Team & access: people, roles, module levels, invites / password resets. Admin → Audit log.
 
 ## Sign-in (Supabase mode)
-- Email + password only (no email-link sign-in). Invite-only: owners send invites from Team & access
-  (needs `SUPABASE_SERVICE_ROLE_KEY`). "Forgot password?" sends a reset link to /account/password.
+- Email + password only (no email-link sign-in). Invite-only: owners send invites (and password resets) from
+  Team & access. The app sends these itself from info@ (SMTP): `generateLink` gives a one-time token, the link
+  goes to `/api/auth/confirm` (verifyOtp → session → "Set your password", no current password needed for 30
+  minutes via the `luxel_pw_link` cookie). Needs `SUPABASE_SERVICE_ROLE_KEY` and the mailbox login. Links expire
+  after 1 hour (Supabase email OTP lifetime). "Forgot password?" on the sign-in page uses Supabase's own email
+  (PKCE, `/api/auth/callback`).
 - Passwords: 12+ characters, letters and numbers, not name/email/"Luxel", and not found in known breaches
   (Have I Been Pwned range API: only a 5-character hash prefix leaves the server). Changing it needs the
   current password (except within 30 minutes of an invite/reset link) and signs out other devices.

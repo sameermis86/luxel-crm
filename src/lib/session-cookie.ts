@@ -91,3 +91,15 @@ export function trustValid(t: TrustStamp | null, o: { uid: string; now: number; 
 }
 
 export const trustCookieOptions = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: TRUST_MS / 1000 };
+
+/* ----------------------------- "arrived from an invite / reset email" (set a password without the current one) ----------------------------- */
+
+export const PWLINK_COOKIE = "luxel_pw_link";
+export const PWLINK_MS = 30 * 60_000;
+export const pwLinkCookieOptions = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: PWLINK_MS / 1000 };
+/** Same signed format as the session stamp: uid + when the link was used. */
+export const signPwLink = (uid: string, at = Date.now()) => signStamp({ uid, start: at, last: at });
+export async function pwLinkValid(value: string | undefined | null, uid: string, now = Date.now()) {
+  const s = await readStamp(value);
+  return !!s && s.uid === uid && now - s.start < PWLINK_MS && s.start <= now + 60_000;
+}

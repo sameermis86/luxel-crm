@@ -16,7 +16,11 @@ export default async function SetPasswordPage() {
   const byLink = await arrivedByLink();
   return (
     <div className="max-w-md space-y-5">
-      <PageHeader eyebrow="Account" title="Set your password" description={`For ${s.email}. At least ${PASSWORD_MIN} characters with letters and numbers; not your name, email or "Luxel".`} />
+      <PageHeader
+        eyebrow="Account"
+        title={byLink ? "Welcome: set your password" : "Change your password"}
+        description={`For ${s.email}. At least ${PASSWORD_MIN} characters with letters and numbers; not your name, email or "Luxel". You'll use it to sign in from now on.`}
+      />
       <ActionForm action={changePasswordAction} submitLabel="Save password" className="card grid gap-3 p-5">
         {!byLink && <label className="block"><span className="label">Current password</span><input name="current" type="password" autoComplete="current-password" className="input" /></label>}
         <label className="block"><span className="label">New password</span><input name="next" type="password" autoComplete="new-password" minLength={PASSWORD_MIN} required className="input" /></label>

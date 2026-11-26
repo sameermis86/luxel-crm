@@ -39,3 +39,15 @@ describe("trusted device", () => {
     expect(trustValid(null, ok)).toBe(false);
   });
 });
+
+import { signPwLink, pwLinkValid, PWLINK_MS } from "@/lib/session-cookie";
+describe("invite / reset link cookie", () => {
+  it("lets the same login set a password without the current one for 30 minutes", async () => {
+    const now = Date.now();
+    const v = await signPwLink("u1", now);
+    expect(await pwLinkValid(v, "u1", now + 1000)).toBe(true);
+    expect(await pwLinkValid(v, "u2", now + 1000)).toBe(false);
+    expect(await pwLinkValid(v, "u1", now + PWLINK_MS + 1)).toBe(false);
+    expect(await pwLinkValid("forged.value", "u1", now)).toBe(false);
+  });
+});

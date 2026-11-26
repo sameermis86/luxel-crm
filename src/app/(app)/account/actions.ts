@@ -11,7 +11,7 @@ import { auditNow } from "@/server/audit";
 import { breachCount } from "@/server/pwned";
 import { arrivedByLink } from "@/server/auth-link";
 import { passwordProblems } from "@/lib/password";
-import { SESSION_COOKIE, TRUST_COOKIE, cookieOptions, readStamp, readTrust, signStamp, signTrust, trustCookieOptions } from "@/lib/session-cookie";
+import { PWLINK_COOKIE, SESSION_COOKIE, TRUST_COOKIE, cookieOptions, readStamp, readTrust, signStamp, signTrust, trustCookieOptions } from "@/lib/session-cookie";
 
 type R = { ok: true; message: string } | { ok: false; error: string };
 
@@ -63,6 +63,7 @@ export async function changePasswordAction(_: R | null, fd: FormData): Promise<R
   // this device stays trusted (if it was); trusted devices elsewhere end with the other sessions
   const trust = s.trustedUntil || s.mfa === "ok" ? await readTrust(jar.get(TRUST_COOKIE)?.value) : null;
   if (trust && trust.exp > now) jar.set(TRUST_COOKIE, await signTrust({ ...trust, iat: now + 1 }), trustCookieOptions);
+  jar.delete(PWLINK_COOKIE);
   await auditNow(ctxFor(s), "auth.password_changed", `user:${s.userId}`, { via: byLink ? "email link" : "account page" });
   return { ok: true, message: "Password changed. Other devices have been signed out." };
 }
