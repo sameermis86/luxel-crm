@@ -199,3 +199,24 @@ export async function runWaveSync(orgId: string, client: WaveClient, opts: { now
     throw e;
   }
 }
+
+/**
+ * What Wave's API offers (schema names only, no business data): the fields on Business and the
+ * query/mutation names that mention transactions. For checking what can be synced.
+ */
+export async function inspectWaveSchema(token: string, fetcher: typeof fetch = fetch) {
+  const q = `query {
+    business: __type(name: "Business") { fields { name args { name } type { name kind ofType { name kind ofType { name } } } } }
+    query: __schema { queryType { fields { name } } mutationType { fields { name } } }
+  }`;
+  const r = await fetcher(ENDPOINT, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+  const j = (await r.json()) as any;
+  if (j.errors?.length) return { error: j.errors[0].message };
+  const fields = (j.data.business?.fields ?? []).map((f: any) => `${f.name}(${(f.args ?? []).map((a: any) => a.name).join(",")})`);
+  const muts = (j.data.query?.mutationType?.fields ?? []).map((f: any) => f.name);
+  return {
+    businessFields: fields,
+    rootQueries: (j.data.query?.queryType?.fields ?? []).map((f: any) => f.name),
+    transactionMutations: muts.filter((m: string) => /transaction/i.test(m)),
+  };
+}

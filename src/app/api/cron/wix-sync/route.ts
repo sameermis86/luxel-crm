@@ -7,7 +7,7 @@ import { runOpsSync } from "@/server/ops/sync";
 import { applyBookings, undoBookingWins, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
 import { applyPastReplies, imapClient, mailboxConfigured, runMailboxSync } from "@/server/integrations/mailbox";
-import { runWaveSync, waveConfigured, waveGraphqlClient } from "@/server/integrations/wave";
+import { inspectWaveSchema, runWaveSync, waveConfigured, waveGraphqlClient } from "@/server/integrations/wave";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -42,6 +42,10 @@ async function handle(req: NextRequest) {
     }
   }
 
+  // ?inspect=wave: what Wave's API offers (schema names only, no data)
+  if (req.nextUrl.searchParams.get("inspect") === "wave" && waveConfigured()) {
+    return NextResponse.json({ ok: true, wave: await inspectWaveSchema(process.env.WAVE_ACCESS_TOKEN!.trim()) });
+  }
   // ?mailbox=apply-replies: one-off, leads still New that already emailed us become Contacted
   if (req.nextUrl.searchParams.get("mailbox") === "apply-replies") {
     return NextResponse.json({ ok: true, pastReplies: await applyPastReplies(orgId) });
