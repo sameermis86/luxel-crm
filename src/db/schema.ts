@@ -602,3 +602,24 @@ export const waveInvoices = pgTable(
   (t) => [uniqueIndex("wave_invoices_org_wave_uq").on(t.orgId, t.waveId), index("wave_invoices_contract_idx").on(t.contractId)],
 );
 export type WaveInvoice = typeof waveInvoices.$inferSelect;
+
+/** Read-only copy of Wave's chart of accounts with current balances (refreshed every sync). */
+export const waveAccounts = pgTable(
+  "wave_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    waveId: text("wave_id").notNull(),
+    businessId: text("business_id").notNull(),
+    name: text("name").notNull(),
+    displayId: text("display_id"),
+    type: text("type").notNull(), // ASSET, LIABILITY, EQUITY, INCOME, EXPENSE
+    subtype: text("subtype"), // e.g. CASH_AND_BANK, COST_OF_GOODS_SOLD, OPERATING_EXPENSE
+    normalBalance: text("normal_balance"), // DEBIT / CREDIT
+    archived: boolean("archived").notNull().default(false),
+    balance: money("balance"), // in the business currency
+    syncedAt: ts("synced_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("wave_accounts_org_wave_uq").on(t.orgId, t.waveId)],
+);
+export type WaveAccount = typeof waveAccounts.$inferSelect;

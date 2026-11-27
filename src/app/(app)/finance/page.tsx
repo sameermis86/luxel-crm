@@ -4,6 +4,8 @@ import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
 import { financeOverview, financeYears } from "@/server/finance";
 import { getWaveState, waveConfigured } from "@/server/integrations/wave";
+import { waveAccounts } from "@/db/schema";
+import { sql } from "drizzle-orm";
 import { dateInTz } from "@/lib/dates";
 import { titleCase } from "@/lib/format";
 import { C } from "@/lib/chart-colors";
@@ -26,10 +28,15 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
     const fallback = years.includes(thisYear) ? thisYear : years.find((y) => y > thisYear) ?? years[years.length - 1] ?? thisYear;
     const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : fallback;
     const o = await financeOverview(tx, `${year}-01-01`, `${year + 1}-01-01`, today);
-    return { ...o, year, years, today, waveState: waveConfigured() ? await getWaveState(p.session.orgId) : null };
+    const [cash] = await tx
+      .select({ total: sql<number>`coalesce(sum(${waveAccounts.balance}), 0)::float`, n: sql<number>`count(*)::int` })
+      .from(waveAccounts)
+      .where(sql`${waveAccounts.subtype} = 'CASH_AND_BANK' and not ${waveAccounts.archived}`);
+    return { ...o, year, years, today, cash, waveState: waveConfigured() ? await getWaveState(p.session.orgId) : null };
   }, "finance:view");
-  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page, wave, waveState } = data;
-  const waveOn = !!waveState?.lastRunAt && !waveState.lastError;
+  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page, wave, waveState, cash } = data;
+  // invoice figures only when Wave is actually used for invoicing (Luxel's Wave holds bank transactions)
+  const waveOn = !!waveState?.lastRunAt && !waveState.lastError && (wave.year.count > 0 || wave.invoicedBy.size > 0);
   const canImport = can(page.session, "finance:manage");
   const months = Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
@@ -152,7 +159,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                 ) : (
                   <>
                     <p className="mt-1 text-muted">
-                      {waveState.businessName}: {waveState.invoices} invoice{waveState.invoices === 1 ? "" : "s"}, {waveState.matched} matched to a contract by the Goodshuffle project number on the invoice. Read-only; nothing is changed in Wave.
+                      {waveState.businessName}: {waveState.accounts ?? 0} accounts synced, read-only.
+                      {cash.n > 0 && <> Cash &amp; bank today: <span className="font-medium text-ink tabular">{cad(cash.total)}</span>.</>}
+                      {(waveState.invoices ?? 0) > 0 && ` ${waveState.invoices} invoices, ${waveState.matched} matched to a contract.`}
                     </p>
                     <p className="hint">Synced {new Date(waveState.lastRunAt).toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" })}</p>
                   </>

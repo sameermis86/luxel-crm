@@ -115,7 +115,7 @@ async function handle(req: NextRequest) {
   if (step("wave") && waveConfigured()) {
     try {
       const w = await runWaveSync(orgId, waveGraphqlClient(process.env.WAVE_ACCESS_TOKEN!.trim()));
-      out.wave = { business: w.businessName, invoices: w.invoices, matched: w.matched };
+      out.wave = { business: w.businessName, accounts: w.accounts, invoices: w.invoices, matched: w.matched };
     } catch (e) {
       console.error("[cron] wave sync failed", e);
       out.wave = { error: (e as Error).message };

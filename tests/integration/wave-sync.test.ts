@@ -14,6 +14,10 @@ const inv = (id: string, over: Partial<WaveInvoiceNode>): WaveInvoiceNode => ({
 });
 let book: WaveInvoiceNode[] = [];
 const client: WaveClient = {
+  accounts: async () => ({ totalPages: 1, items: [
+    { id: "a1", name: "Chequing", type: { value: "ASSET" }, subtype: { value: "CASH_AND_BANK" }, normalBalanceType: "DEBIT", balanceInBusinessCurrency: "12,345.67" },
+    { id: "a2", name: "Decor rentals", type: { value: "INCOME" }, subtype: { value: "INCOME" }, normalBalanceType: "CREDIT", balanceInBusinessCurrency: "500" },
+  ] }),
   businesses: async () => [{ id: "b1", name: "Luxel Decor", isPersonal: false, currency: { code: "CAD" } }, { id: "p1", name: "Personal", isPersonal: true }],
   invoices: async (_b, page, size) => ({ totalPages: Math.max(1, Math.ceil(book.length / size)), items: book.slice((page - 1) * size, page * size) }),
 };
@@ -40,7 +44,10 @@ describe("wave sync", () => {
       inv("4", { poNumber: "200000001", status: "DRAFT", total: { value: "5000.00" } }), // draft: not invoiced yet
     ];
     const s = await runWaveSync(env.orgId, client, { now: new Date("2026-11-26T12:00:00Z") });
-    expect(s).toMatchObject({ businessName: "Luxel Decor", invoices: 4, matched: 3, lastError: null });
+    expect(s).toMatchObject({ businessName: "Luxel Decor", invoices: 4, matched: 3, accounts: 2, lastError: null });
+    const { waveAccounts } = await import("@/db/schema");
+    const accts = await withCtx(owner, (tx) => tx.select().from(waveAccounts));
+    expect(accts.find((a) => a.name === "Chequing")).toMatchObject({ type: "ASSET", subtype: "CASH_AND_BANK", balance: 12345.67 });
 
     const o = await withCtx(owner, (tx) => financeOverview(tx, "2027-01-01", "2028-01-01", "2026-11-26"));
     const rossi = o.list.find((x) => x.c.project === "104820712")!.c.id;

@@ -155,6 +155,13 @@
       "when": 1795701171919,
       "tag": "0021_wave_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795740476139,
+      "tag": "0022_wave_accounts",
+      "breakpoints": true
     }
   ]
 }

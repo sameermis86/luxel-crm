@@ -1,11 +1,11 @@
 import { and, eq, notInArray } from "drizzle-orm";
 import { withCtx, systemCtx } from "@/db/client";
-import { financeContracts, integrationState, waveInvoices } from "@/db/schema";
+import { financeContracts, integrationState, waveAccounts, waveInvoices } from "@/db/schema";
 import { findProject, num, type WaveInvoiceNode } from "@/lib/wave";
 
 /**
- * Wave (accounting) → Finance, read-only: copies the business's invoices and matches each to its
- * Goodshuffle contract by project number. Never creates or changes anything in Wave. Full re-read
+ * Wave (accounting) → Finance, read-only: copies the business's chart of accounts with current balances
+ * (types drive the statements), and its invoices, each matched to its Goodshuffle contract by project number. Never creates or changes anything in Wave. Full re-read
  * each run (invoices are few), so edits and deletions in Wave show up on the next sync.
  */
 const ENDPOINT = "https://gql.waveapps.com/graphql/public";
@@ -13,8 +13,22 @@ const STATE_KEY = "wave_sync";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 50;
 
+export interface WaveAccountNode {
+  id: string;
+  name: string;
+  displayId?: string | null;
+  type: { value: string } | null;
+  subtype: { value: string } | null;
+  normalBalanceType?: string | null;
+  isArchived?: boolean | null;
+  /** Wave sends balances as decimal text */
+  balanceInBusinessCurrency?: string | number | null;
+  balance?: string | number | null;
+}
+
 export interface WaveClient {
   businesses(): Promise<{ id: string; name: string; isPersonal?: boolean; currency?: { code: string } | null }[]>;
+  accounts(businessId: string, page: number, pageSize: number): Promise<{ totalPages: number; items: WaveAccountNode[] }>;
   invoices(businessId: string, page: number, pageSize: number): Promise<{ totalPages: number; items: WaveInvoiceNode[] }>;
 }
 
@@ -25,6 +39,7 @@ export interface WaveState {
   businessName?: string;
   invoices?: number;
   matched?: number;
+  accounts?: number;
 }
 
 export const waveConfigured = (env: Record<string, string | undefined> = process.env) => !!env.WAVE_ACCESS_TOKEN?.trim();
@@ -47,6 +62,21 @@ export function waveGraphqlClient(token: string, fetcher: typeof fetch = fetch):
         `query { businesses(page: 1, pageSize: 20) { edges { node { id name isPersonal currency { code } } } } }`,
       );
       return d.businesses.edges.map((e) => e.node);
+    },
+    async accounts(businessId, page, pageSize) {
+      const d = await gql<{ business: { accounts: { pageInfo: { totalPages: number }; edges: { node: WaveAccountNode }[] } } | null }>(
+        `query ($businessId: ID!, $page: Int!, $pageSize: Int!) {
+          business(id: $businessId) {
+            accounts(page: $page, pageSize: $pageSize) {
+              pageInfo { currentPage totalPages }
+              edges { node { id name displayId type { value } subtype { value } normalBalanceType isArchived balance balanceInBusinessCurrency } }
+            }
+          }
+        }`,
+        { businessId, page, pageSize },
+      );
+      if (!d.business) throw new Error("Wave business not found: check WAVE_BUSINESS_ID");
+      return { totalPages: d.business.accounts.pageInfo.totalPages, items: d.business.accounts.edges.map((e) => e.node) };
     },
     async invoices(businessId, page, pageSize) {
       const d = await gql<{ business: { invoices: { pageInfo: { totalPages: number }; edges: { node: WaveInvoiceNode }[] } } | null }>(
@@ -104,7 +134,29 @@ export async function runWaveSync(orgId: string, client: WaveClient, opts: { now
       all.push(...r.items);
       if (page >= r.totalPages) break;
     }
+    const accounts: WaveAccountNode[] = [];
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const r = await client.accounts(business.id, page, PAGE_SIZE);
+      accounts.push(...r.items);
+      if (page >= r.totalPages) break;
+    }
     const ctx = systemCtx(orgId);
+    const dec = (v: string | number | null | undefined) => {
+      const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+      return v != null && String(v).trim() !== "" && Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+    };
+    await withCtx(ctx, async (tx) => {
+      for (const a of accounts) {
+        const vals = {
+          businessId: business.id, name: a.name, displayId: a.displayId ?? null, type: (a.type?.value ?? "UNKNOWN").toUpperCase(),
+          subtype: a.subtype?.value?.toUpperCase() ?? null, normalBalance: a.normalBalanceType ?? null, archived: !!a.isArchived,
+          balance: dec(a.balanceInBusinessCurrency ?? a.balance), syncedAt: now,
+        };
+        await tx.insert(waveAccounts).values({ orgId, waveId: a.id, ...vals }).onConflictDoUpdate({ target: [waveAccounts.orgId, waveAccounts.waveId], set: vals });
+      }
+      const seen = accounts.map((a) => a.id);
+      if (seen.length) await tx.delete(waveAccounts).where(notInArray(waveAccounts.waveId, seen));
+    });
     let matched = 0;
     await withCtx(ctx, async (tx) => {
       const contracts = await tx.select({ id: financeContracts.id, project: financeContracts.project }).from(financeContracts);
@@ -139,7 +191,7 @@ export async function runWaveSync(orgId: string, client: WaveClient, opts: { now
       if (seen.length) await tx.delete(waveInvoices).where(notInArray(waveInvoices.waveId, seen));
       else await tx.delete(waveInvoices);
     });
-    const state: WaveState = { lastRunAt: now.toISOString(), lastError: null, businessId: business.id, businessName: business.name, invoices: all.length, matched };
+    const state: WaveState = { lastRunAt: now.toISOString(), lastError: null, businessId: business.id, businessName: business.name, invoices: all.length, matched, accounts: accounts.length };
     await saveState(orgId, state);
     return state;
   } catch (e) {
