@@ -14,8 +14,8 @@ export interface WaveInvoiceNode {
   viewUrl: string | null;
   customer: { name: string | null } | null;
   currency: { code: string } | null;
-  total: { value: string } | null;
-  amountDue: { value: string } | null;
+  total: WaveMoney | null;
+  amountDue: WaveMoney | null;
 }
 
 /** Statuses that are real invoices (drafts aren't revenue yet). */
@@ -34,7 +34,11 @@ export function findProject(inv: Pick<WaveInvoiceNode, "poNumber" | "title" | "s
   return found.find((p) => known.has(p)) ?? found[0] ?? null;
 }
 
-export const num = (m: { value: string } | null | undefined) => {
-  const n = m ? Number(m.value) : NaN;
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+/** Wave Money: `raw` is the amount in minor units (cents); `value` is display text, e.g. "1,234.00". */
+export interface WaveMoney { raw?: number | null; value?: string | null }
+export const num = (m: WaveMoney | null | undefined) => {
+  if (!m) return null;
+  if (typeof m.raw === "number" && Number.isFinite(m.raw)) return Math.round(m.raw) / 100;
+  const n = Number(String(m.value ?? "").replace(/[^0-9.\-]/g, ""));
+  return m.value != null && String(m.value).trim() !== "" && Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 };

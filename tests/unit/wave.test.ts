@@ -14,6 +14,9 @@ describe("wave invoices", () => {
     expect(isInvoiced("DRAFT")).toBe(false);
     expect(isInvoiced("paid")).toBe(true);
     expect(num({ value: "1234.567" })).toBe(1234.57);
+    expect(num({ value: "12,345.60" })).toBe(12345.6); // display text has thousands separators
+    expect(num({ raw: 1234560, value: "12,345.60" })).toBe(12345.6); // cents win
+    expect(num({ value: "" })).toBeNull();
     expect(num(null)).toBeNull();
   });
 });

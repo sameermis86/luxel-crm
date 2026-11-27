@@ -56,7 +56,7 @@ export function waveGraphqlClient(token: string, fetcher: typeof fetch = fetch):
               pageInfo { currentPage totalPages totalCount }
               edges { node {
                 id invoiceNumber status title subhead poNumber memo invoiceDate dueDate modifiedAt viewUrl
-                customer { name } currency { code } total { value } amountDue { value }
+                customer { name } currency { code } total { raw value } amountDue { raw value }
               } }
             }
           }
