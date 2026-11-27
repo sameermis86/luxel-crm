@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Upload } from "lucide-react";
 import { withPage } from "@/server/page";
 import { can } from "@/server/auth";
-import { financeOverview, financeYears } from "@/server/finance";
+import { financeOverview, financeYears, waveBalances } from "@/server/finance";
 import { getWaveState, waveConfigured } from "@/server/integrations/wave";
 import { waveAccounts } from "@/db/schema";
 import { sql } from "drizzle-orm";
@@ -32,9 +32,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       .select({ total: sql<number>`coalesce(sum(${waveAccounts.balance}), 0)::float`, n: sql<number>`count(*)::int` })
       .from(waveAccounts)
       .where(sql`${waveAccounts.subtype} = 'CASH_AND_BANK' and not ${waveAccounts.archived}`);
-    return { ...o, year, years, today, cash, waveState: waveConfigured() ? await getWaveState(p.session.orgId) : null };
+    const balances = waveConfigured() ? await waveBalances(tx, today) : null;
+    return { ...o, year, years, today, cash, balances, waveState: waveConfigured() ? await getWaveState(p.session.orgId) : null };
   }, "finance:view");
-  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page, wave, waveState, cash } = data;
+  const { kpis, ahead, byMonth, bySource, list, undated, lastImport, year, years, page, wave, waveState, cash, balances } = data;
   // invoice figures only when Wave is actually used for invoicing (Luxel's Wave holds bank transactions)
   const waveOn = !!waveState?.lastRunAt && !waveState.lastError && (wave.year.count > 0 || wave.invoicedBy.size > 0);
   const canImport = can(page.session, "finance:manage");
@@ -104,6 +105,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
               </table>
             </details>
           </section>
+
+          {balances && balances.groups.length > 0 && <Balances b={balances} />}
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <section className="card overflow-hidden">
@@ -200,5 +203,75 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub: string 
       <p className="mt-1 font-display text-[28px] leading-none tabular">{value}</p>
       <p className="mt-1.5 text-xs text-muted">{sub}</p>
     </div>
+  );
+}
+
+const SUBTYPE_LABELS: Record<string, string> = {
+  CASH_AND_BANK: "Cash & bank", MONEY_IN_TRANSIT: "Money in transit", RECEIVABLE_INVOICES: "Owed by clients (invoices)", RECEIVABLE_OTHER: "Other receivables",
+  OTHER_CURRENT_ASSETS: "Other current assets", PROPERTY_PLANT_EQUIPMENT: "Equipment & property", CREDIT_CARD: "Credit cards", SALES_TAX: "Sales tax owing",
+  LOANS: "Loans", DUE_FOR_PAYROLL: "Payroll owing", CUSTOMER_PREPAYMENTS_AND_CREDITS: "Client deposits & credits", OTHER_CURRENT_LIABILITY: "Other current liabilities",
+  OTHER_LONG_TERM_LIABILITY: "Long-term liabilities", DUE_TO_YOU_AND_OTHER_OWNERS: "Owed to owners", RETAINED_EARNINGS: "Retained earnings", NON_RETAINED_EARNINGS: "Owner investment & drawings",
+};
+const TYPE_LABELS: Record<string, string> = { ASSET: "Assets", LIABILITY: "Liabilities", EQUITY: "Equity" };
+const label = (s: string | null) => (s ? SUBTYPE_LABELS[s] ?? titleCase(s.toLowerCase()) : "Other");
+
+/** Balances from Wave (live) with the change since the snapshots ~7 and ~30 days ago, and the cash & bank trend. */
+function Balances({ b }: { b: NonNullable<Awaited<ReturnType<typeof import("@/server/finance").waveBalances>>> }) {
+  const delta = (now: number, then: number | null) => {
+    if (then == null) return <span className="text-faint">—</span>;
+    const d = Math.round(now - then);
+    return <span className={d === 0 ? "text-muted" : "text-ink"}>{d > 0 ? "+" : d < 0 ? "−" : ""}{cad(Math.abs(d))}</span>;
+  };
+  const max = Math.max(1, ...b.cashTrend.map((d) => Math.abs(d.total)));
+  return (
+    <section className="card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[19px]">Balances from Wave</h2>
+        <p className="text-xs text-muted">
+          Live from Wave every 15 minutes; a snapshot is kept each day{b.firstSnapshot ? `, since ${b.firstSnapshot}` : ""}. Changes appear once there&apos;s a week or a month of history.
+        </p>
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead><tr><th className="th pl-0">Account group</th><th className="th text-right">Today</th><th className="th text-right">7 days</th><th className="th text-right">30 days</th></tr></thead>
+          <tbody>
+            {(["ASSET", "LIABILITY", "EQUITY"] as const).map((t) => {
+              const rows = b.groups.filter((g) => g.type === t);
+              if (!rows.length) return null;
+              return [
+                <tr key={t}><td colSpan={4} className="pt-3 pb-1 text-[13px] font-medium text-muted">{TYPE_LABELS[t]}</td></tr>,
+                ...rows.map((g) => (
+                  <tr key={`${t}:${g.subtype}`} className="border-t border-edge">
+                    <td className="td pl-0">{label(g.subtype)}</td>
+                    <td className="td text-right tabular font-medium">{cad(g.total)}</td>
+                    <td className="td text-right tabular">{delta(g.total, g.week)}</td>
+                    <td className="td text-right tabular">{delta(g.total, g.month)}</td>
+                  </tr>
+                )),
+              ];
+            })}
+          </tbody>
+        </table>
+      </div>
+      <h3 className="mt-5 text-[15px] font-medium">Cash &amp; bank, daily</h3>
+      {b.cashTrend.length < 2 ? (
+        <p className="mt-1 text-sm text-muted">History starts {b.firstSnapshot ?? "today"}; the trend fills in day by day.</p>
+      ) : (
+        <>
+          <div className="mt-3 flex h-32 items-end gap-[2px] border-b border-edge" role="img" aria-label="Cash and bank balance by day; the table view has the numbers">
+            {b.cashTrend.map((d) => (
+              <div key={d.day} className="group relative flex h-full flex-1 flex-col justify-end" tabIndex={0} aria-label={`${d.day}: ${cad(d.total)}`}>
+                <div className="mx-auto w-full max-w-[18px] rounded-t-[4px]" style={{ height: `${Math.max(2, (Math.abs(d.total) / max) * 100)}%`, background: C.leads }} />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 rounded-md border border-edge bg-card px-2 py-1 text-xs whitespace-nowrap shadow-lg group-hover:block group-focus:block">{d.day} · {cad(d.total)}</span>
+              </div>
+            ))}
+          </div>
+          <details className="mt-2 text-sm">
+            <summary className="cursor-pointer text-muted hover:text-ink">Table view</summary>
+            <ul className="mt-1 max-h-48 overflow-auto text-xs">{b.cashTrend.map((d) => <li key={d.day} className="flex justify-between py-0.5"><span>{d.day}</span><span className="tabular">{cad(d.total)}</span></li>)}</ul>
+          </details>
+        </>
+      )}
+    </section>
   );
 }

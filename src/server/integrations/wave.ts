@@ -1,6 +1,7 @@
 import { and, eq, notInArray } from "drizzle-orm";
 import { withCtx, systemCtx } from "@/db/client";
-import { financeContracts, integrationState, waveAccounts, waveInvoices } from "@/db/schema";
+import { financeContracts, integrationState, waveAccounts, waveBalanceSnapshots, waveInvoices } from "@/db/schema";
+import { dateInTz } from "@/lib/dates";
 import { findProject, num, type WaveInvoiceNode } from "@/lib/wave";
 
 /**
@@ -156,6 +157,17 @@ export async function runWaveSync(orgId: string, client: WaveClient, opts: { now
       }
       const seen = accounts.map((a) => a.id);
       if (seen.length) await tx.delete(waveAccounts).where(notInArray(waveAccounts.waveId, seen));
+
+      // today's balance per account (Toronto date); later syncs the same day overwrite it, so it ends at the day's last value
+      const day = dateInTz(now);
+      for (const a of accounts) {
+        if (a.isArchived) continue;
+        const snap = { name: a.name, type: (a.type?.value ?? "UNKNOWN").toUpperCase(), subtype: a.subtype?.value?.toUpperCase() ?? null, balance: dec(a.balanceInBusinessCurrency ?? a.balance), takenAt: now };
+        await tx
+          .insert(waveBalanceSnapshots)
+          .values({ orgId, waveId: a.id, day, ...snap })
+          .onConflictDoUpdate({ target: [waveBalanceSnapshots.orgId, waveBalanceSnapshots.waveId, waveBalanceSnapshots.day], set: snap });
+      }
     });
     let matched = 0;
     await withCtx(ctx, async (tx) => {

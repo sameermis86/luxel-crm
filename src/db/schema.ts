@@ -623,3 +623,19 @@ export const waveAccounts = pgTable(
   (t) => [uniqueIndex("wave_accounts_org_wave_uq").on(t.orgId, t.waveId)],
 );
 export type WaveAccount = typeof waveAccounts.$inferSelect;
+
+/** One balance per Wave account per day (Toronto date), kept at the day's last sync: balance history from the API. */
+export const waveBalanceSnapshots = pgTable(
+  "wave_balance_snapshots",
+  {
+    orgId: uuid("org_id").notNull().references(() => orgs.id),
+    waveId: text("wave_id").notNull(),
+    day: date("day").notNull(),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    subtype: text("subtype"),
+    balance: money("balance"),
+    takenAt: ts("taken_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.waveId, t.day] }), index("wave_snapshots_day_idx").on(t.orgId, t.day)],
+);

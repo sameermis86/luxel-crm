@@ -162,6 +162,13 @@
       "when": 1795740476139,
       "tag": "0022_wave_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795740958131,
+      "tag": "0023_wave_snapshots",
+      "breakpoints": true
     }
   ]
 }

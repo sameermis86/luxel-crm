@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withCtx, closeDb, type Ctx } from "@/db/client";
 import { waveInvoices } from "@/db/schema";
-import { importContracts, financeOverview } from "@/server/finance";
+import { importContracts, financeOverview, waveBalances } from "@/server/finance";
 import { runWaveSync, getWaveState, waveGraphqlClient, type WaveClient } from "@/server/integrations/wave";
 import type { WaveInvoiceNode } from "@/lib/wave";
 import { freshOrg } from "../helpers";
@@ -73,5 +73,29 @@ describe("wave sync", () => {
     const two: WaveClient = { ...client, businesses: async () => [{ id: "a", name: "A" }, { id: "b", name: "B" }] };
     await expect(runWaveSync(env.orgId, two)).rejects.toThrow(/WAVE_BUSINESS_ID/);
     await runWaveSync(env.orgId, { ...two, invoices: client.invoices }, { businessId: "b" });
+  });
+
+  it("keeps one balance snapshot per account per day (the day's last), and shows the change since a week ago", async () => {
+    const { waveBalanceSnapshots } = await import("@/db/schema");
+    let cash = "1000.00";
+    const c2: WaveClient = { ...client, accounts: async () => ({ totalPages: 1, items: [
+      { id: "a1", name: "Chequing", type: { value: "ASSET" }, subtype: { value: "CASH_AND_BANK" }, balanceInBusinessCurrency: cash },
+      { id: "t1", name: "Transfer clearing", type: { value: "ASSET" }, subtype: { value: "TRANSFERS" }, balanceInBusinessCurrency: "5" },
+    ] }) };
+    await runWaveSync(env.orgId, c2, { now: new Date("2026-11-20T15:00:00Z") }); // Nov 20, Toronto
+    cash = "1500.00";
+    await runWaveSync(env.orgId, c2, { now: new Date("2026-11-20T20:00:00Z") }); // same day: overwrites
+    cash = "4000.00";
+    await runWaveSync(env.orgId, c2, { now: new Date("2026-11-27T15:00:00Z") }); // a week later
+    const snaps = await withCtx(owner, (tx) => tx.select().from(waveBalanceSnapshots));
+    const on = (d: string) => snaps.filter((x) => x.waveId === "a1" && String(x.day) === d).map((x) => x.balance);
+    expect(on("2026-11-20")).toEqual([1500]); // one row for the day: the later sync's value
+    expect(on("2026-11-27")).toEqual([4000]);
+
+    const b = await withCtx(owner, (tx) => waveBalances(tx, "2026-11-27"));
+    const g = b.groups.find((x) => x.subtype === "CASH_AND_BANK")!;
+    expect(g).toMatchObject({ total: 4000, week: 1500, month: null });
+    expect(b.groups.some((x) => x.subtype === "TRANSFERS")).toBe(false); // Wave's internal transfer accounts are hidden
+    expect(b.cashTrend.filter((d) => d.day === "2026-11-20" || d.day === "2026-11-27")).toEqual([{ day: "2026-11-20", total: 1500 }, { day: "2026-11-27", total: 4000 }]);
   });
 });

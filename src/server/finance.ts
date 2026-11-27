@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { withCtx, type Ctx, type Tx } from "@/db/client";
-import { financeContracts, financeImports, leads, waveInvoices } from "@/db/schema";
+import { financeContracts, financeImports, leads, waveAccounts, waveBalanceSnapshots, waveInvoices } from "@/db/schema";
 import { INVOICED_STATUSES } from "@/lib/wave";
 import type { FinanceMapping, FinanceRow } from "@/lib/finance";
 import { audit } from "./audit";
@@ -111,4 +111,51 @@ export async function financeOverview(tx: Tx, from: string, to: string, today: s
     .limit(100);
   const invoicedBy = new Map(perContract.map((p) => [p.contractId!, p]));
   return { kpis: k, ahead, byMonth, bySource, list, undated, lastImport: last ?? null, wave: { invoicedBy, year: inv, unmatched } };
+}
+
+/* ----------------------------- Wave balances (current + daily snapshots) ----------------------------- */
+
+
+const TYPE_ORDER = ["ASSET", "LIABILITY", "EQUITY"] as const;
+
+/**
+ * Balance-sheet accounts grouped by Wave subtype: today's balance (live), and the same group's total in
+ * the latest snapshot on or before 7 and 30 days ago (null until there's that much history).
+ * Plus the daily cash & bank total for the last 90 days of snapshots.
+ */
+export async function waveBalances(tx: Tx, today: string) {
+  const live = await tx
+    .select({ type: waveAccounts.type, subtype: waveAccounts.subtype, total: sum(waveAccounts.balance), accounts: sql<number>`count(*) filter (where ${waveAccounts.balance} <> 0)::int` })
+    .from(waveAccounts)
+    .where(and(sql`not ${waveAccounts.archived}`, inArray(waveAccounts.type, [...TYPE_ORDER])))
+    .groupBy(waveAccounts.type, waveAccounts.subtype);
+  const days = await tx.select({ day: sql<string>`${waveBalanceSnapshots.day}::text` }).from(waveBalanceSnapshots).groupBy(waveBalanceSnapshots.day).orderBy(waveBalanceSnapshots.day);
+  const dayList = days.map((d) => d.day);
+  const onOrBefore = (back: number) => {
+    const t = new Date(today + "T12:00:00Z");
+    t.setUTCDate(t.getUTCDate() - back);
+    const want = t.toISOString().slice(0, 10);
+    return [...dayList].reverse().find((d) => d <= want) ?? null;
+  };
+  const at = async (day: string | null) => {
+    if (!day) return null;
+    const rows = await tx
+      .select({ subtype: waveBalanceSnapshots.subtype, type: waveBalanceSnapshots.type, total: sum(waveBalanceSnapshots.balance) })
+      .from(waveBalanceSnapshots)
+      .where(eq(waveBalanceSnapshots.day, day))
+      .groupBy(waveBalanceSnapshots.type, waveBalanceSnapshots.subtype);
+    return { day, by: new Map(rows.map((r) => [`${r.type}:${r.subtype}`, r.total])) };
+  };
+  const [week, month] = await Promise.all([at(onOrBefore(7)), at(onOrBefore(30))]);
+  const groups = live
+    .filter((g) => g.subtype !== "TRANSFERS" && (g.total !== 0 || g.accounts > 0))
+    .map((g) => ({ ...g, week: week?.by.get(`${g.type}:${g.subtype}`) ?? null, month: month?.by.get(`${g.type}:${g.subtype}`) ?? null }))
+    .sort((a, b) => TYPE_ORDER.indexOf(a.type as never) - TYPE_ORDER.indexOf(b.type as never) || Math.abs(b.total) - Math.abs(a.total));
+  const cashTrend = await tx
+    .select({ day: sql<string>`${waveBalanceSnapshots.day}::text`, total: sum(waveBalanceSnapshots.balance) })
+    .from(waveBalanceSnapshots)
+    .where(and(eq(waveBalanceSnapshots.subtype, "CASH_AND_BANK"), sql`${waveBalanceSnapshots.day} > (${today}::date - 90)`))
+    .groupBy(waveBalanceSnapshots.day)
+    .orderBy(waveBalanceSnapshots.day);
+  return { groups, firstSnapshot: dayList[0] ?? null, snapshotDays: dayList.length, weekDay: week?.day ?? null, monthDay: month?.day ?? null, cashTrend };
 }

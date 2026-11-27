@@ -18,3 +18,12 @@ Paid amounts aren't shown (Finance is revenue only).
 
 API: GraphQL `https://gql.waveapps.com/graphql/public`, `Authorization: Bearer <token>`.
 To match invoices, put the Goodshuffle project number in the invoice's PO/SO number field in Wave.
+
+## Accounts, balances and daily snapshots
+Wave's public API can read accounts (with current balances), customers, vendors, products, sales taxes,
+invoices and estimates, but **not transactions** (only `moneyTransactionCreate` exists) and no reports.
+So every sync copies the chart of accounts into `wave_accounts` (type, subtype, balance) and keeps one row per
+account per day in `wave_balance_snapshots` (Toronto date; the day's last sync wins). Finance → "Balances from
+Wave" shows today's balance-sheet groups (Wave's internal TRANSFERS accounts hidden), the change since the
+snapshots ~7 and ~30 days back, and the daily cash & bank trend. History starts the day snapshots began.
+`?inspect=wave` on the cron endpoint lists what Wave's API exposes (names only).
