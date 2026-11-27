@@ -205,11 +205,11 @@ export async function runWaveSync(orgId: string, client: WaveClient, opts: { now
  * query/mutation names that mention transactions. For checking what can be synced.
  */
 export async function inspectWaveSchema(token: string, fetcher: typeof fetch = fetch) {
-  const q = `query {
-    business: __type(name: "Business") { fields { name args { name } type { name kind ofType { name kind ofType { name } } } } }
+  const q = `query ($t: String!) {
+    business: __type(name: $t) { fields { name args { name } } }
     query: __schema { queryType { fields { name } } mutationType { fields { name } } }
   }`;
-  const r = await fetcher(ENDPOINT, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+  const r = await fetcher(ENDPOINT, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ query: q, variables: { t: "Business" } }) });
   const j = (await r.json()) as any;
   if (j.errors?.length) return { error: j.errors[0].message };
   const fields = (j.data.business?.fields ?? []).map((f: any) => `${f.name}(${(f.args ?? []).map((a: any) => a.name).join(",")})`);
