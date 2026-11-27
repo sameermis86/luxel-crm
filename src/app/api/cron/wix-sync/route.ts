@@ -6,7 +6,7 @@ import { configuredCalendars, inspectCalendars, inspectItems, runGoodshuffleSync
 import { runOpsSync } from "@/server/ops/sync";
 import { applyBookings, undoBookingWins, runSetmoreSync, setmoreConfigured, setmoreRestClient } from "@/server/integrations/setmore";
 import { systemCtx } from "@/db/client";
-import { imapClient, mailboxConfigured, runMailboxSync } from "@/server/integrations/mailbox";
+import { applyPastReplies, imapClient, mailboxConfigured, runMailboxSync } from "@/server/integrations/mailbox";
 import { runWaveSync, waveConfigured, waveGraphqlClient } from "@/server/integrations/wave";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +42,10 @@ async function handle(req: NextRequest) {
     }
   }
 
+  // ?mailbox=apply-replies: one-off, leads still New that already emailed us become Contacted
+  if (req.nextUrl.searchParams.get("mailbox") === "apply-replies") {
+    return NextResponse.json({ ok: true, pastReplies: await applyPastReplies(orgId) });
+  }
   // ?setmore=undo-wins: one-off correction of leads the booking sync created as Won
   if (req.nextUrl.searchParams.get("setmore") === "undo-wins") {
     return NextResponse.json({ ok: true, undoWins: await undoBookingWins(systemCtx(orgId)) });

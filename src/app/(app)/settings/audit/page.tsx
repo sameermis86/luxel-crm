@@ -13,7 +13,7 @@ const LABELS: Record<string, string> = {
   "auth.sign_in": "Signed in", "auth.sign_out": "Signed out", "auth.sign_out_everywhere": "Signed out everywhere",
   "auth.password_changed": "Changed password", "auth.password_reset_sent": "Password reset link sent", "auth.session_expired": "Session expired",
   "auth.mfa_enrolled": "Turned on 2-step verification", "auth.mfa_removed": "Removed 2-step verification",
-  "auth.device_trusted": "Trusted a device for 30 days", "auth.device_untrusted": "Stopped trusting a device", "finance.imported": "Imported contracts",
+  "auth.device_trusted": "Trusted a device for 30 days", "auth.device_untrusted": "Stopped trusting a device", "finance.imported": "Imported contracts", "sync.mailbox": "Mailbox sync logged emails on leads",
   "user.created": "Added a person", "user.updated": "Changed a person", "user.invited": "Sent an invite", "access.changed": "Changed module access",
 };
 

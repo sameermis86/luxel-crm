@@ -46,8 +46,9 @@ describe("reminder emails", () => {
 
     // the mailbox sync later reads the same message from Sent: not logged twice
     const copy: MailClient = {
+      async folders() { return [{ path: "INBOX" }, { path: "Sent", specialUse: "\\Sent" }]; },
       async fetch(folder) {
-        return { uidValidity: "1", messages: folder === "sent" ? [{ folder: "sent", uid: 1, messageId: "<crm-1@luxeldecor.com>", date: new Date(), subject: "Your wedding", from: ["info@luxeldecor.com"], to: ["sofia@gmail.com"], cc: [] }] : [] };
+        return { uidValidity: "1", messages: folder === "Sent" ? [{ folder: "Sent", uid: 1, messageId: "<crm-1@luxeldecor.com>", date: new Date(), subject: "Your wedding", from: ["info@luxeldecor.com"], to: ["sofia@gmail.com"], cc: [] }] : [] };
       },
       async close() {},
     };

@@ -61,7 +61,7 @@ function title(e: TimelineEvent, users: Record<string, string>) {
       return "Imported from CSV";
     }
     case "call_logged": return `Call ${p.direction === "inbound" ? "received" : "made"}${p.outcome ? ` · ${p.outcome}` : ""}`;
-    case "email_logged": return `Email ${p.direction === "inbound" ? "received" : "sent"}${p.outcome ? ` · ${p.outcome}` : ""}`;
+    case "email_logged": return `Email ${p.direction === "inbound" ? (p.role === "cc" ? "received (client copied)" : "received") : "sent"}${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "text_logged": return "Text sent from the office phone";
     case "meeting_logged": return `Meeting${p.outcome ? ` · ${p.outcome}` : ""}`;
     case "note_added": return "Note";

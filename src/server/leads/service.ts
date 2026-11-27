@@ -366,7 +366,7 @@ export async function logActivity(
    * closeDueBy: follow-ups due by this time are marked done (default: now + 12h). Synced history
    * (the mailbox) passes the activity's own time, or null to close none. extraPayload goes on the event.
    */
-  opts: { closeDueBy?: Date | null; extraPayload?: Record<string, unknown> } = {},
+  opts: { closeDueBy?: Date | null; extraPayload?: Record<string, unknown>; inboundCountsAsContact?: boolean } = {},
 ) {
   const now = nowArg ?? new Date();
   const a = activitySchema.parse(input);
@@ -386,6 +386,11 @@ export async function logActivity(
     if (lead.status === "new") patch.status = "contacted";
   } else {
     if (!lead.firstReplyAt && (lead.lastContactedAt || lead.contactedAt)) patch.firstReplyAt = at;
+    // the client wrote to us: we're in touch (synced mail), even if we haven't written first
+    if (opts.inboundCountsAsContact) {
+      if (!lead.lastContactedAt || lead.lastContactedAt < at) patch.lastContactedAt = at;
+      if (lead.status === "new") patch.status = "contacted";
+    }
   }
   const { lead: updated } = await updateLead(tx, ctx, leadId, patch, { now });
 
